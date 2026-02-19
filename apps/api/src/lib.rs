@@ -141,7 +141,7 @@ struct MagicLinkVerifyRequest {
 #[derive(Serialize)]
 struct SessionResponse {
     token: String,
-    user_id: Uuid,
+    user_id: String,
 }
 
 async fn request_magic_link(
@@ -154,7 +154,6 @@ async fn request_magic_link(
     }
     let token = random_token(32);
     let token_hash = sha256_hex(&token);
-
     let magic_url = format!("{}/?token={token}", state.app_origin.trim_end_matches('/'));
 
     sqlx::query("insert into magic_link_tokens (email, token_hash, expires_at) values ($1, $2, now() + interval '15 minutes')")
@@ -215,20 +214,20 @@ async fn verify_magic_link(
             .execute(&mut *tx)
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-        sqlx::query("insert into user_emails (user_id, email, verified_at) values ($1, $2, now())")
+        sqlx::query("insert into user_emails (user_id, user_pillid, email, verified_at) select u.id, u.pillid, $2, now() from users u where u.id = $1")
             .bind(uid)
             .bind(&email)
             .execute(&mut *tx)
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-        sqlx::query("insert into auth_methods (user_id, method_type, label) values ($1, 'magic_link_email', $2)")
+        sqlx::query("insert into auth_methods (user_id, user_pillid, method_type, label) select u.id, u.pillid, 'magic_link_email', $2 from users u where u.id = $1")
             .bind(uid)
             .bind(&email)
             .execute(&mut *tx)
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-        sqlx::query("insert into budgets (user_id, name, currency_code, is_default) values ($1, 'My Budget', 'USD', true)")
+        sqlx::query("insert into budgets (user_id, user_pillid, name, currency_code, is_default) select u.id, u.pillid, 'My Budget', 'USD', true from users u where u.id = $1")
             .bind(uid)
             .execute(&mut *tx)
             .await
@@ -245,7 +244,7 @@ async fn verify_magic_link(
     let session_token = random_token(48);
     let session_hash = sha256_hex(&session_token);
     let expires_at = Utc::now() + Duration::days(30);
-    sqlx::query("insert into sessions (user_id, token_hash, expires_at) values ($1, $2, $3)")
+    sqlx::query("insert into sessions (user_id, user_pillid, token_hash, expires_at) select u.id, u.pillid, $2, $3 from users u where u.id = $1")
         .bind(user_id)
         .bind(session_hash)
         .bind(expires_at)
@@ -257,9 +256,15 @@ async fn verify_magic_link(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
+    let (user_pillid,): (String,) = sqlx::query_as("select pillid from users where id = $1")
+        .bind(user_id)
+        .fetch_one(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
     Ok(Json(SessionResponse {
         token: session_token,
-        user_id,
+        user_id: user_pillid,
     }))
 }
 
@@ -269,7 +274,7 @@ async fn me(
 ) -> Result<Json<UserDto>, StatusCode> {
     let user_id = user_from_headers(&state, &headers).await?;
     let user = sqlx::query_as::<_, UserDto>(
-        "select u.id, ue.email from users u join user_emails ue on ue.user_id = u.id where u.id = $1 order by ue.verified_at desc nulls last limit 1",
+        "select u.pillid as id, ue.email from users u join user_emails ue on ue.user_id = u.id where u.id = $1 order by ue.verified_at desc nulls last limit 1",
     )
     .bind(user_id)
     .fetch_one(&state.db)
@@ -291,7 +296,6 @@ fn extract_bearer_token(headers: &HeaderMap) -> Result<&str, StatusCode> {
         .get(AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
         .ok_or(StatusCode::UNAUTHORIZED)?;
-
     auth.strip_prefix("Bearer ").ok_or(StatusCode::UNAUTHORIZED)
 }
 
@@ -316,13 +320,13 @@ async fn user_from_token_hash<L: SessionLookup + Sync>(
 
 #[derive(Serialize, FromRow)]
 struct UserDto {
-    id: Uuid,
+    id: String,
     email: String,
 }
 
 #[derive(Serialize, FromRow)]
 struct BudgetDto {
-    id: Uuid,
+    id: String,
     name: String,
     currency_code: String,
     is_default: bool,
@@ -339,13 +343,11 @@ async fn list_budgets(
     headers: HeaderMap,
 ) -> Result<Json<Vec<BudgetDto>>, StatusCode> {
     let user_id = user_from_headers(&state, &headers).await?;
-    let rows = sqlx::query_as::<_, BudgetDto>(
-        "select id, name, currency_code, is_default from budgets where user_id = $1 order by created_at",
-    )
-    .bind(user_id)
-    .fetch_all(&state.db)
-    .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let rows = sqlx::query_as::<_, BudgetDto>("select pillid as id, name, currency_code, is_default from budgets where user_id = $1 order by created_at")
+        .bind(user_id)
+        .fetch_all(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(rows))
 }
 
@@ -366,28 +368,26 @@ async fn create_budget(
         }
     }
     let currency = payload.currency_code.unwrap_or_else(|| "USD".into());
-    let row = sqlx::query_as::<_, BudgetDto>(
-        "insert into budgets (user_id, name, currency_code, is_default) values ($1, $2, $3, false) returning id, name, currency_code, is_default",
-    )
-    .bind(user_id)
-    .bind(payload.name)
-    .bind(currency)
-    .fetch_one(&state.db)
-    .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let row = sqlx::query_as::<_, BudgetDto>("insert into budgets (user_id, user_pillid, name, currency_code, is_default) select u.id, u.pillid, $2, $3, false from users u where u.id = $1 returning pillid as id, name, currency_code, is_default")
+        .bind(user_id)
+        .bind(payload.name)
+        .bind(currency)
+        .fetch_one(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(row))
 }
 
 #[derive(Serialize, FromRow)]
 struct AccountDto {
-    id: Uuid,
-    budget_id: Uuid,
+    id: String,
+    budget_id: String,
     name: String,
 }
 
 #[derive(Deserialize)]
 struct SaveAccount {
-    budget_id: Uuid,
+    budget_id: String,
     name: String,
 }
 
@@ -396,7 +396,7 @@ async fn list_accounts(
     headers: HeaderMap,
 ) -> Result<Json<Vec<AccountDto>>, StatusCode> {
     let user_id = user_from_headers(&state, &headers).await?;
-    let rows = sqlx::query_as::<_, AccountDto>("select id, budget_id, name from accounts where user_id = $1 and deleted_at is null order by created_at")
+    let rows = sqlx::query_as::<_, AccountDto>("select pillid as id, budget_pillid as budget_id, name from accounts where user_id = $1 and deleted_at is null order by created_at")
         .bind(user_id)
         .fetch_all(&state.db)
         .await
@@ -410,41 +410,41 @@ async fn create_account(
     Json(payload): Json<SaveAccount>,
 ) -> Result<Json<AccountDto>, StatusCode> {
     let user_id = user_from_headers(&state, &headers).await?;
-    let row = sqlx::query_as::<_, AccountDto>("insert into accounts (user_id, budget_id, name) values ($1, $2, $3) returning id, budget_id, name")
+    let row = sqlx::query_as::<_, AccountDto>("insert into accounts (user_id, user_pillid, budget_id, budget_pillid, name) select u.id, u.pillid, b.id, b.pillid, $3 from users u join budgets b on b.pillid = $2 and b.user_id = u.id and b.deleted_at is null where u.id = $1 returning pillid as id, budget_pillid as budget_id, name")
         .bind(user_id)
         .bind(payload.budget_id)
         .bind(payload.name)
         .fetch_one(&state.db)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|_| StatusCode::BAD_REQUEST)?;
     Ok(Json(row))
 }
 
 async fn update_account(
     State(state): State<AppState>,
     headers: HeaderMap,
-    Path(id): Path<Uuid>,
+    Path(id): Path<String>,
     Json(payload): Json<SaveAccount>,
 ) -> Result<Json<AccountDto>, StatusCode> {
     let user_id = user_from_headers(&state, &headers).await?;
-    let row = sqlx::query_as::<_, AccountDto>("update accounts set budget_id = $1, name = $2, updated_at = now() where id = $3 and user_id = $4 returning id, budget_id, name")
+    let row = sqlx::query_as::<_, AccountDto>("update accounts a set budget_id = b.id, budget_pillid = b.pillid, name = $3, updated_at = now() from budgets b where a.pillid = $1 and a.user_id = $4 and b.pillid = $2 and b.user_id = $4 and b.deleted_at is null returning a.pillid as id, a.budget_pillid as budget_id, a.name")
+        .bind(id)
         .bind(payload.budget_id)
         .bind(payload.name)
-        .bind(id)
         .bind(user_id)
         .fetch_one(&state.db)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|_| StatusCode::BAD_REQUEST)?;
     Ok(Json(row))
 }
 
 async fn delete_account(
     State(state): State<AppState>,
     headers: HeaderMap,
-    Path(id): Path<Uuid>,
+    Path(id): Path<String>,
 ) -> Result<StatusCode, StatusCode> {
     let user_id = user_from_headers(&state, &headers).await?;
-    sqlx::query("update accounts set deleted_at = now() where id = $1 and user_id = $2")
+    sqlx::query("update accounts set deleted_at = now() where pillid = $1 and user_id = $2")
         .bind(id)
         .bind(user_id)
         .execute(&state.db)
@@ -455,13 +455,13 @@ async fn delete_account(
 
 #[derive(Serialize, FromRow)]
 struct SupercategoryDto {
-    id: Uuid,
-    budget_id: Uuid,
+    id: String,
+    budget_id: String,
     name: String,
 }
 #[derive(Deserialize)]
 struct SaveSupercategory {
-    budget_id: Uuid,
+    budget_id: String,
     name: String,
 }
 
@@ -470,7 +470,7 @@ async fn list_supercategories(
     headers: HeaderMap,
 ) -> Result<Json<Vec<SupercategoryDto>>, StatusCode> {
     let user_id = user_from_headers(&state, &headers).await?;
-    let rows = sqlx::query_as::<_, SupercategoryDto>("select id, budget_id, name from supercategories where user_id = $1 and deleted_at is null order by created_at")
+    let rows = sqlx::query_as::<_, SupercategoryDto>("select pillid as id, budget_pillid as budget_id, name from supercategories where user_id = $1 and deleted_at is null order by created_at")
         .bind(user_id).fetch_all(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(rows))
 }
@@ -480,28 +480,28 @@ async fn create_supercategory(
     Json(payload): Json<SaveSupercategory>,
 ) -> Result<Json<SupercategoryDto>, StatusCode> {
     let user_id = user_from_headers(&state, &headers).await?;
-    let row = sqlx::query_as::<_, SupercategoryDto>("insert into supercategories (user_id, budget_id, name) values ($1,$2,$3) returning id, budget_id, name")
-        .bind(user_id).bind(payload.budget_id).bind(payload.name).fetch_one(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let row = sqlx::query_as::<_, SupercategoryDto>("insert into supercategories (user_id, user_pillid, budget_id, budget_pillid, name) select u.id, u.pillid, b.id, b.pillid, $3 from users u join budgets b on b.pillid = $2 and b.user_id = u.id and b.deleted_at is null where u.id = $1 returning pillid as id, budget_pillid as budget_id, name")
+        .bind(user_id).bind(payload.budget_id).bind(payload.name).fetch_one(&state.db).await.map_err(|_| StatusCode::BAD_REQUEST)?;
     Ok(Json(row))
 }
 async fn update_supercategory(
     State(state): State<AppState>,
     headers: HeaderMap,
-    Path(id): Path<Uuid>,
+    Path(id): Path<String>,
     Json(payload): Json<SaveSupercategory>,
 ) -> Result<Json<SupercategoryDto>, StatusCode> {
     let user_id = user_from_headers(&state, &headers).await?;
-    let row = sqlx::query_as::<_, SupercategoryDto>("update supercategories set budget_id=$1,name=$2,updated_at=now() where id=$3 and user_id=$4 returning id,budget_id,name")
-        .bind(payload.budget_id).bind(payload.name).bind(id).bind(user_id).fetch_one(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let row = sqlx::query_as::<_, SupercategoryDto>("update supercategories s set budget_id=b.id,budget_pillid=b.pillid,name=$3,updated_at=now() from budgets b where s.pillid=$1 and s.user_id=$4 and b.pillid=$2 and b.user_id=$4 and b.deleted_at is null returning s.pillid as id,s.budget_pillid as budget_id,s.name")
+        .bind(id).bind(payload.budget_id).bind(payload.name).bind(user_id).fetch_one(&state.db).await.map_err(|_| StatusCode::BAD_REQUEST)?;
     Ok(Json(row))
 }
 async fn delete_supercategory(
     State(state): State<AppState>,
     headers: HeaderMap,
-    Path(id): Path<Uuid>,
+    Path(id): Path<String>,
 ) -> Result<StatusCode, StatusCode> {
     let user_id = user_from_headers(&state, &headers).await?;
-    sqlx::query("update supercategories set deleted_at=now() where id=$1 and user_id=$2")
+    sqlx::query("update supercategories set deleted_at=now() where pillid=$1 and user_id=$2")
         .bind(id)
         .bind(user_id)
         .execute(&state.db)
@@ -512,15 +512,15 @@ async fn delete_supercategory(
 
 #[derive(Serialize, FromRow)]
 struct CategoryDto {
-    id: Uuid,
-    budget_id: Uuid,
-    supercategory_id: Uuid,
+    id: String,
+    budget_id: String,
+    supercategory_id: String,
     name: String,
 }
 #[derive(Deserialize)]
 struct SaveCategory {
-    budget_id: Uuid,
-    supercategory_id: Uuid,
+    budget_id: String,
+    supercategory_id: String,
     name: String,
 }
 
@@ -529,7 +529,7 @@ async fn list_categories(
     headers: HeaderMap,
 ) -> Result<Json<Vec<CategoryDto>>, StatusCode> {
     let user_id = user_from_headers(&state, &headers).await?;
-    let rows = sqlx::query_as::<_, CategoryDto>("select id, budget_id, supercategory_id, name from categories where user_id = $1 and deleted_at is null order by created_at")
+    let rows = sqlx::query_as::<_, CategoryDto>("select pillid as id, budget_pillid as budget_id, supercategory_pillid as supercategory_id, name from categories where user_id = $1 and deleted_at is null order by created_at")
         .bind(user_id).fetch_all(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(rows))
 }
@@ -539,28 +539,28 @@ async fn create_category(
     Json(payload): Json<SaveCategory>,
 ) -> Result<Json<CategoryDto>, StatusCode> {
     let user_id = user_from_headers(&state, &headers).await?;
-    let row = sqlx::query_as::<_, CategoryDto>("insert into categories (user_id,budget_id,supercategory_id,name) values ($1,$2,$3,$4) returning id,budget_id,supercategory_id,name")
-        .bind(user_id).bind(payload.budget_id).bind(payload.supercategory_id).bind(payload.name).fetch_one(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let row = sqlx::query_as::<_, CategoryDto>("insert into categories (user_id, user_pillid, budget_id, budget_pillid, supercategory_id, supercategory_pillid, name) select u.id, u.pillid, b.id, b.pillid, s.id, s.pillid, $4 from users u join budgets b on b.pillid=$2 and b.user_id=u.id and b.deleted_at is null join supercategories s on s.pillid=$3 and s.user_id=u.id and s.deleted_at is null and s.budget_id=b.id where u.id=$1 returning pillid as id,budget_pillid as budget_id,supercategory_pillid as supercategory_id,name")
+        .bind(user_id).bind(payload.budget_id).bind(payload.supercategory_id).bind(payload.name).fetch_one(&state.db).await.map_err(|_| StatusCode::BAD_REQUEST)?;
     Ok(Json(row))
 }
 async fn update_category(
     State(state): State<AppState>,
     headers: HeaderMap,
-    Path(id): Path<Uuid>,
+    Path(id): Path<String>,
     Json(payload): Json<SaveCategory>,
 ) -> Result<Json<CategoryDto>, StatusCode> {
     let user_id = user_from_headers(&state, &headers).await?;
-    let row = sqlx::query_as::<_, CategoryDto>("update categories set budget_id=$1,supercategory_id=$2,name=$3,updated_at=now() where id=$4 and user_id=$5 returning id,budget_id,supercategory_id,name")
-        .bind(payload.budget_id).bind(payload.supercategory_id).bind(payload.name).bind(id).bind(user_id).fetch_one(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let row = sqlx::query_as::<_, CategoryDto>("update categories c set budget_id=b.id,budget_pillid=b.pillid,supercategory_id=s.id,supercategory_pillid=s.pillid,name=$4,updated_at=now() from budgets b, supercategories s where c.pillid=$1 and c.user_id=$5 and b.pillid=$2 and b.user_id=$5 and b.deleted_at is null and s.pillid=$3 and s.user_id=$5 and s.deleted_at is null and s.budget_id=b.id returning c.pillid as id,c.budget_pillid as budget_id,c.supercategory_pillid as supercategory_id,c.name")
+        .bind(id).bind(payload.budget_id).bind(payload.supercategory_id).bind(payload.name).bind(user_id).fetch_one(&state.db).await.map_err(|_| StatusCode::BAD_REQUEST)?;
     Ok(Json(row))
 }
 async fn delete_category(
     State(state): State<AppState>,
     headers: HeaderMap,
-    Path(id): Path<Uuid>,
+    Path(id): Path<String>,
 ) -> Result<StatusCode, StatusCode> {
     let user_id = user_from_headers(&state, &headers).await?;
-    sqlx::query("update categories set deleted_at=now() where id=$1 and user_id=$2")
+    sqlx::query("update categories set deleted_at=now() where pillid=$1 and user_id=$2")
         .bind(id)
         .bind(user_id)
         .execute(&state.db)
@@ -571,15 +571,15 @@ async fn delete_category(
 
 #[derive(Deserialize)]
 struct SplitInput {
-    category_id: Uuid,
+    category_id: String,
     memo: Option<String>,
     inflow: i64,
     outflow: i64,
 }
 #[derive(Deserialize)]
 struct SaveTransaction {
-    budget_id: Uuid,
-    account_id: Uuid,
+    budget_id: String,
+    account_id: String,
     date: NaiveDate,
     payee: Option<String>,
     memo: Option<String>,
@@ -587,19 +587,27 @@ struct SaveTransaction {
 }
 #[derive(Serialize, FromRow)]
 struct SplitDto {
-    id: Uuid,
-    category_id: Uuid,
+    id: String,
+    category_id: String,
     memo: Option<String>,
     inflow: i64,
     outflow: i64,
 }
-type TransactionRow = (Uuid, Uuid, Uuid, NaiveDate, Option<String>, Option<String>);
+
+type TransactionRow = (
+    String,
+    String,
+    String,
+    NaiveDate,
+    Option<String>,
+    Option<String>,
+);
 
 #[derive(Serialize)]
 struct TransactionDto {
-    id: Uuid,
-    budget_id: Uuid,
-    account_id: Uuid,
+    id: String,
+    budget_id: String,
+    account_id: String,
     date: NaiveDate,
     payee: Option<String>,
     memo: Option<String>,
@@ -611,14 +619,13 @@ async fn list_transactions(
     headers: HeaderMap,
 ) -> Result<Json<Vec<TransactionDto>>, StatusCode> {
     let user_id = user_from_headers(&state, &headers).await?;
-    let tx_rows: Vec<TransactionRow> = sqlx::query_as(
-        "select id,budget_id,account_id,tx_date,payee,memo from transactions where user_id=$1 and deleted_at is null order by tx_date desc, created_at desc",
-    ).bind(user_id).fetch_all(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let tx_rows: Vec<TransactionRow> = sqlx::query_as("select pillid,budget_pillid,account_pillid,tx_date,payee,memo from transactions where user_id=$1 and deleted_at is null order by tx_date desc, created_at desc")
+        .bind(user_id).fetch_all(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let mut out = Vec::with_capacity(tx_rows.len());
     for (id, budget_id, account_id, date, payee, memo) in tx_rows {
-        let splits = sqlx::query_as::<_, SplitDto>("select id, category_id, memo, inflow, outflow from transaction_splits where transaction_id=$1 and deleted_at is null order by created_at")
-            .bind(id).fetch_all(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let splits = sqlx::query_as::<_, SplitDto>("select pillid as id, category_pillid as category_id, memo, inflow, outflow from transaction_splits where transaction_pillid=$1 and deleted_at is null order by created_at")
+            .bind(&id).fetch_all(&state.db).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         out.push(TransactionDto {
             id,
             budget_id,
@@ -643,21 +650,21 @@ async fn create_transaction(
         .begin()
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let (id,): (Uuid,) = sqlx::query_as("insert into transactions (user_id,budget_id,account_id,tx_date,payee,memo) values ($1,$2,$3,$4,$5,$6) returning id")
-        .bind(user_id).bind(payload.budget_id).bind(payload.account_id).bind(payload.date).bind(payload.payee.clone()).bind(payload.memo.clone())
-        .fetch_one(&mut *tx).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let (id, budget_id, account_id): (String, String, String) = sqlx::query_as("insert into transactions (user_id,user_pillid,budget_id,budget_pillid,account_id,account_pillid,tx_date,payee,memo) select u.id,u.pillid,b.id,b.pillid,a.id,a.pillid,$4,$5,$6 from users u join budgets b on b.pillid=$2 and b.user_id=u.id and b.deleted_at is null join accounts a on a.pillid=$3 and a.user_id=u.id and a.budget_id=b.id and a.deleted_at is null where u.id=$1 returning pillid,budget_pillid,account_pillid")
+        .bind(user_id).bind(payload.budget_id.clone()).bind(payload.account_id.clone()).bind(payload.date).bind(payload.payee.clone()).bind(payload.memo.clone())
+        .fetch_one(&mut *tx).await.map_err(|_| StatusCode::BAD_REQUEST)?;
     for s in &payload.splits {
-        sqlx::query("insert into transaction_splits (transaction_id,category_id,memo,inflow,outflow) values ($1,$2,$3,$4,$5)")
-            .bind(id).bind(s.category_id).bind(s.memo.clone()).bind(s.inflow).bind(s.outflow)
-            .execute(&mut *tx).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        sqlx::query("insert into transaction_splits (transaction_id,transaction_pillid,category_id,category_pillid,memo,inflow,outflow) select t.id,t.pillid,c.id,c.pillid,$3,$4,$5 from transactions t join categories c on c.pillid=$2 and c.user_id=$6 and c.deleted_at is null and c.budget_id=t.budget_id where t.pillid=$1")
+            .bind(&id).bind(&s.category_id).bind(s.memo.clone()).bind(s.inflow).bind(s.outflow).bind(user_id)
+            .execute(&mut *tx).await.map_err(|_| StatusCode::BAD_REQUEST)?;
     }
     tx.commit()
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(TransactionDto {
         id,
-        budget_id: payload.budget_id,
-        account_id: payload.account_id,
+        budget_id,
+        account_id,
         date: payload.date,
         payee: payload.payee,
         memo: payload.memo,
@@ -668,7 +675,7 @@ async fn create_transaction(
 async fn update_transaction(
     State(state): State<AppState>,
     headers: HeaderMap,
-    Path(id): Path<Uuid>,
+    Path(id): Path<String>,
     Json(payload): Json<SaveTransaction>,
 ) -> Result<Json<TransactionDto>, StatusCode> {
     let user_id = user_from_headers(&state, &headers).await?;
@@ -677,26 +684,26 @@ async fn update_transaction(
         .begin()
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    sqlx::query("update transactions set budget_id=$1,account_id=$2,tx_date=$3,payee=$4,memo=$5,updated_at=now() where id=$6 and user_id=$7")
-        .bind(payload.budget_id).bind(payload.account_id).bind(payload.date).bind(payload.payee.clone()).bind(payload.memo.clone()).bind(id).bind(user_id)
-        .execute(&mut *tx).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    sqlx::query("update transaction_splits set deleted_at=now() where transaction_id=$1")
-        .bind(id)
+    let (budget_id, account_id): (String, String) = sqlx::query_as("update transactions t set budget_id=b.id,budget_pillid=b.pillid,account_id=a.id,account_pillid=a.pillid,tx_date=$4,payee=$5,memo=$6,updated_at=now() from budgets b, accounts a where t.pillid=$1 and t.user_id=$7 and b.pillid=$2 and b.user_id=$7 and b.deleted_at is null and a.pillid=$3 and a.user_id=$7 and a.budget_id=b.id and a.deleted_at is null returning t.budget_pillid,t.account_pillid")
+        .bind(&id).bind(payload.budget_id.clone()).bind(payload.account_id.clone()).bind(payload.date).bind(payload.payee.clone()).bind(payload.memo.clone()).bind(user_id)
+        .fetch_one(&mut *tx).await.map_err(|_| StatusCode::BAD_REQUEST)?;
+    sqlx::query("update transaction_splits set deleted_at=now() where transaction_pillid=$1")
+        .bind(&id)
         .execute(&mut *tx)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     for s in &payload.splits {
-        sqlx::query("insert into transaction_splits (transaction_id,category_id,memo,inflow,outflow) values ($1,$2,$3,$4,$5)")
-            .bind(id).bind(s.category_id).bind(s.memo.clone()).bind(s.inflow).bind(s.outflow)
-            .execute(&mut *tx).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        sqlx::query("insert into transaction_splits (transaction_id,transaction_pillid,category_id,category_pillid,memo,inflow,outflow) select t.id,t.pillid,c.id,c.pillid,$3,$4,$5 from transactions t join categories c on c.pillid=$2 and c.user_id=$6 and c.deleted_at is null and c.budget_id=t.budget_id where t.pillid=$1")
+            .bind(&id).bind(&s.category_id).bind(s.memo.clone()).bind(s.inflow).bind(s.outflow).bind(user_id)
+            .execute(&mut *tx).await.map_err(|_| StatusCode::BAD_REQUEST)?;
     }
     tx.commit()
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(TransactionDto {
         id,
-        budget_id: payload.budget_id,
-        account_id: payload.account_id,
+        budget_id,
+        account_id,
         date: payload.date,
         payee: payload.payee,
         memo: payload.memo,
@@ -707,10 +714,10 @@ async fn update_transaction(
 async fn delete_transaction(
     State(state): State<AppState>,
     headers: HeaderMap,
-    Path(id): Path<Uuid>,
+    Path(id): Path<String>,
 ) -> Result<StatusCode, StatusCode> {
     let user_id = user_from_headers(&state, &headers).await?;
-    sqlx::query("update transactions set deleted_at=now() where id=$1 and user_id=$2")
+    sqlx::query("update transactions set deleted_at=now() where pillid=$1 and user_id=$2")
         .bind(id)
         .bind(user_id)
         .execute(&state.db)
@@ -761,12 +768,10 @@ pub async fn seed_dev_data(pool: &PgPool) -> anyhow::Result<()> {
             .bind(uid)
             .execute(&mut *tx)
             .await?;
-        sqlx::query("insert into user_emails (user_id,email,verified_at) values ($1,$2,now())")
-            .bind(uid)
-            .bind(email)
-            .execute(&mut *tx)
-            .await?;
-        sqlx::query("insert into auth_methods (user_id,method_type,label) values ($1,'magic_link_email',$2)").bind(uid).bind(email).execute(&mut *tx).await?;
+        sqlx::query("insert into user_emails (user_id,user_pillid,email,verified_at) select id,pillid,$2,now() from users where id=$1")
+            .bind(uid).bind(email).execute(&mut *tx).await?;
+        sqlx::query("insert into auth_methods (user_id,user_pillid,method_type,label) select id,pillid,'magic_link_email',$2 from users where id=$1")
+            .bind(uid).bind(email).execute(&mut *tx).await?;
         uid
     };
 
@@ -779,11 +784,11 @@ pub async fn seed_dev_data(pool: &PgPool) -> anyhow::Result<()> {
     {
         bid
     } else {
-        sqlx::query_as::<_, (Uuid,)>("insert into budgets (user_id,name,currency_code,is_default) values ($1,'Seed Budget','USD',true) returning id")
+        sqlx::query_as::<_, (Uuid,)>("insert into budgets (user_id,user_pillid,name,currency_code,is_default) select id,pillid,'Seed Budget','USD',true from users where id=$1 returning id")
                 .bind(user_id).fetch_one(&mut *tx).await?.0
     };
 
-    sqlx::query("insert into accounts (user_id,budget_id,name) values ($1,$2,'Checking') on conflict do nothing")
+    sqlx::query("insert into accounts (user_id,user_pillid,budget_id,budget_pillid,name) select u.id,u.pillid,b.id,b.pillid,'Checking' from users u join budgets b on b.id=$2 where u.id=$1 on conflict do nothing")
         .bind(user_id).bind(budget_id).execute(&mut *tx).await?;
 
     tx.commit().await?;

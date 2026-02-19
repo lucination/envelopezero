@@ -5,6 +5,7 @@ use envelopezero_api::router;
 use envelopezero_api::seed_dev_data;
 use envelopezero_api::AppState;
 use serde_json::json;
+use serde_json::Value;
 use sqlx::PgPool;
 use tower::ServiceExt;
 
@@ -83,4 +84,67 @@ async fn seed_dev_data_is_idempotent(pool: PgPool) {
     .await
     .unwrap();
     assert_eq!(budgets, 1);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn auth_and_budget_ids_are_pillids(pool: PgPool) {
+    let app = router(AppState {
+        db: pool.clone(),
+        feature_passkeys: false,
+        feature_multi_budget: false,
+        app_origin: "http://localhost:8080".to_string(),
+        smtp_host: "127.0.0.1".to_string(),
+        smtp_port: 1025,
+        smtp_from: "noreply@envelopezero.local".to_string(),
+    });
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/auth/magic-link/request")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            json!({ "email": "pillid@example.com" }).to_string(),
+        ))
+        .unwrap();
+    let response = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let token = serde_json::from_slice::<Value>(&body).unwrap()["debug_token"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/auth/magic-link/verify")
+        .header("content-type", "application/json")
+        .body(Body::from(json!({ "token": token }).to_string()))
+        .unwrap();
+    let response = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let session = serde_json::from_slice::<Value>(&body).unwrap();
+
+    let user_id = session["user_id"].as_str().unwrap();
+    assert_eq!(user_id.len(), 32);
+
+    let auth = format!("Bearer {}", session["token"].as_str().unwrap());
+    let req = Request::builder()
+        .uri("/api/budgets")
+        .header("authorization", auth)
+        .body(Body::empty())
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let budgets = serde_json::from_slice::<Vec<Value>>(&body).unwrap();
+    let budget_id = budgets[0]["id"].as_str().unwrap();
+    assert_eq!(budget_id.len(), 32);
 }
