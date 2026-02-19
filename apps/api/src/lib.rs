@@ -741,23 +741,37 @@ struct DashboardDto {
     available: i64,
 }
 
+fn project_available(inflow: i64, outflow: i64) -> i64 {
+    inflow - outflow
+}
+
+async fn compute_dashboard_projection(
+    db: &PgPool,
+    user_id: Uuid,
+) -> Result<DashboardDto, StatusCode> {
+    let (inflow, outflow): (i64, i64) = sqlx::query_as(
+        "select coalesce(sum(ts.inflow),0)::bigint as inflow, coalesce(sum(ts.outflow),0)::bigint as outflow from transactions t join transaction_splits ts on ts.transaction_id=t.id where t.user_id=$1 and t.deleted_at is null and ts.deleted_at is null",
+    )
+    .bind(user_id)
+    .fetch_one(db)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(DashboardDto {
+        inflow,
+        outflow,
+        available: project_available(inflow, outflow),
+    })
+}
+
 async fn dashboard(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<Json<DashboardDto>, StatusCode> {
     let user_id = user_from_headers(&state, &headers).await?;
-    let (inflow, outflow): (i64, i64) = sqlx::query_as(
-        "select coalesce(sum(ts.inflow),0)::bigint as inflow, coalesce(sum(ts.outflow),0)::bigint as outflow from transactions t join transaction_splits ts on ts.transaction_id=t.id where t.user_id=$1 and t.deleted_at is null and ts.deleted_at is null",
-    )
-    .bind(user_id)
-    .fetch_one(&state.db)
-    .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    Ok(Json(DashboardDto {
-        inflow,
-        outflow,
-        available: inflow - outflow,
-    }))
+    Ok(Json(
+        compute_dashboard_projection(&state.db, user_id).await?,
+    ))
 }
 
 pub async fn seed_dev_data(pool: &PgPool) -> anyhow::Result<()> {
@@ -874,5 +888,11 @@ mod unit_tests {
         headers.insert(AUTHORIZATION, "Bearer testtoken".parse().unwrap());
         let token = extract_bearer_token(&headers).expect("token parsed");
         assert_eq!(token, "testtoken");
+    }
+
+    #[test]
+    fn dashboard_projection_is_deterministic() {
+        assert_eq!(project_available(4_500, 1_200), 3_300);
+        assert_eq!(project_available(4_500, 1_200), 3_300);
     }
 }
