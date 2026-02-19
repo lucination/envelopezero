@@ -22,3 +22,8 @@
 
 ## Outcome
 Stage 3 criteria are met with isolated and tested derived totals logic.
+
+## Implementation Evidence (2026-02-19 deep run)
+- Completed with concrete code/test updates in this branch.
+- Validation executed: ./scripts/check.sh, ./scripts/smoke.sh, npm run e2e.
+- See stage-tagged commits for exact diff and residuals.
