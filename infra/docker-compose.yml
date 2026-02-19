@@ -10,6 +10,7 @@ services:
       APP_ORIGIN: http://localhost:8080
       FEATURE_PASSKEYS: "false"
       FEATURE_MULTI_BUDGET: "false"
+      FEATURE_ASSIGNMENTS: "true"
       DEV_SEED: "true"
       SMTP_HOST: mailpit
       SMTP_PORT: 1025
