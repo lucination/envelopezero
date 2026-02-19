@@ -20,7 +20,8 @@ SESSION=$(curl -fsS -X POST "$APP_URL/api/auth/magic-link/verify" \
 AUTH_TOKEN=$(echo "$SESSION" | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')
 
 echo "[smoke] check budgets"
-curl -fsS "$APP_URL/api/budgets" -H "Authorization: Bearer $AUTH_TOKEN" >/dev/null
+BUDGETS=$(curl -fsS "$APP_URL/api/budgets" -H "Authorization: Bearer $AUTH_TOKEN")
+echo "$BUDGETS" | grep -Eq '"id":"[a-f0-9]{32}"'
 
 echo "[smoke] check Mailpit has sent email"
 curl -fsS "$MAILPIT_URL/api/v1/search?query=$EMAIL" | grep -q 'messages'

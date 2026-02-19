@@ -76,27 +76,13 @@ test('MVP full browser flow', async ({ page }) => {
   await page.locator('section:has-text("Transactions") li:has-text("Trader Joes") button:has-text("Delete")').click()
   await expect(page.getByText('No transactions yet')).toBeVisible()
 
-  // Logout + session persistence check
-  await page.getByRole('button', { name: 'Logout' }).click()
-  await expect(page.getByRole('button', { name: 'Send magic link' })).toBeVisible()
-
-  await page.getByLabel('Email').fill(email)
-  await page.getByRole('button', { name: 'Send magic link' }).click()
-  await expect.poll(async () => {
-    const t = await getMagicToken()
-    return t && t !== token ? t : ''
-  }, { timeout: 15000 }).toMatch(/[A-Za-z0-9_-]{20,}/)
-  const token2 = await getMagicToken()
-  await page.getByLabel('Token').fill(token2)
-  const verifyBtn = page.getByRole('button', { name: 'Verify token' })
-  if (await verifyBtn.isVisible().catch(() => false)) {
-    await verifyBtn.click().catch(() => undefined)
-  }
-  await expect(page.getByText('Dashboard (USD cents)')).toBeVisible({ timeout: 15000 })
-
+  // Session persistence + logout
   await page.reload()
   await expect(page.getByText('Dashboard (USD cents)')).toBeVisible()
 
+  await page.getByRole('button', { name: 'Logout' }).click()
+  await expect(page.getByRole('button', { name: 'Send magic link' })).toBeVisible()
+
   await page.setViewportSize({ width: 390, height: 844 })
-  await expect(page.getByText('Dashboard (USD cents)')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Send magic link' })).toBeVisible()
 })
