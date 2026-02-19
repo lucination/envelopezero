@@ -644,6 +644,10 @@ async fn create_transaction(
     headers: HeaderMap,
     Json(payload): Json<SaveTransaction>,
 ) -> Result<Json<TransactionDto>, StatusCode> {
+    if payload.splits.is_empty() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
     let user_id = user_from_headers(&state, &headers).await?;
     let mut tx = state
         .db
@@ -678,6 +682,10 @@ async fn update_transaction(
     Path(id): Path<String>,
     Json(payload): Json<SaveTransaction>,
 ) -> Result<Json<TransactionDto>, StatusCode> {
+    if payload.splits.is_empty() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
     let user_id = user_from_headers(&state, &headers).await?;
     let mut tx = state
         .db

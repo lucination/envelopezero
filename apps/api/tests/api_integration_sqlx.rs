@@ -9,6 +9,18 @@ use serde_json::Value;
 use sqlx::PgPool;
 use tower::ServiceExt;
 
+fn app_for(pool: PgPool) -> axum::Router {
+    router(AppState {
+        db: pool,
+        feature_passkeys: false,
+        feature_multi_budget: false,
+        app_origin: "http://localhost:8080".to_string(),
+        smtp_host: "127.0.0.1".to_string(),
+        smtp_port: 1025,
+        smtp_from: "noreply@envelopezero.local".to_string(),
+    })
+}
+
 #[sqlx::test(migrations = "./migrations")]
 async fn health_endpoint_is_ok(pool: PgPool) {
     let app = router(AppState {
@@ -147,4 +159,95 @@ async fn auth_and_budget_ids_are_pillids(pool: PgPool) {
     let budgets = serde_json::from_slice::<Vec<Value>>(&body).unwrap();
     let budget_id = budgets[0]["id"].as_str().unwrap();
     assert_eq!(budget_id.len(), 32);
+}
+
+async fn bootstrap_auth(app: axum::Router, email: &str) -> (axum::Router, String, String) {
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/auth/magic-link/request")
+        .header("content-type", "application/json")
+        .body(Body::from(json!({ "email": email }).to_string()))
+        .unwrap();
+    let response = app.clone().oneshot(req).await.unwrap();
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let token = serde_json::from_slice::<Value>(&body).unwrap()["debug_token"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/auth/magic-link/verify")
+        .header("content-type", "application/json")
+        .body(Body::from(json!({ "token": token }).to_string()))
+        .unwrap();
+    let response = app.clone().oneshot(req).await.unwrap();
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let session = serde_json::from_slice::<Value>(&body).unwrap();
+
+    let auth_token = session["token"].as_str().unwrap().to_string();
+    let auth_header = format!("Bearer {auth_token}");
+
+    let req = Request::builder()
+        .uri("/api/budgets")
+        .header("authorization", auth_header)
+        .body(Body::empty())
+        .unwrap();
+    let response = app.clone().oneshot(req).await.unwrap();
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let budgets = serde_json::from_slice::<Vec<Value>>(&body).unwrap();
+    let budget_id = budgets[0]["id"].as_str().unwrap().to_string();
+
+    (app, auth_token, budget_id)
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn transaction_create_rejects_empty_splits(pool: PgPool) {
+    let app = app_for(pool.clone());
+    let (app, auth_token, budget_id) = bootstrap_auth(app, "nosplits@example.com").await;
+    let auth_header = format!("Bearer {auth_token}");
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/accounts")
+        .header("authorization", auth_header.clone())
+        .header("content-type", "application/json")
+        .body(Body::from(
+            json!({ "name": "Checking", "budget_id": budget_id }).to_string(),
+        ))
+        .unwrap();
+    let response = app.clone().oneshot(req).await.unwrap();
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let account_id = serde_json::from_slice::<Value>(&body).unwrap()["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/transactions")
+        .header("authorization", auth_header)
+        .header("content-type", "application/json")
+        .body(Body::from(
+            json!({
+                "budget_id": budget_id,
+                "account_id": account_id,
+                "date": "2026-02-19",
+                "payee": "NoSplits",
+                "memo": null,
+                "splits": []
+            })
+            .to_string(),
+        ))
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }

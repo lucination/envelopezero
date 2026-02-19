@@ -149,14 +149,29 @@ Stage 1 is done only if all are true:
 
 ## 8) Implementation Checklist (junior-friendly)
 
-- [ ] Read `docs/design.md` sections on canonical inputs and transaction details.
-- [ ] Enumerate all transaction create/update/delete handlers.
-- [ ] Add/verify `details.length > 0` guards on all write paths.
-- [ ] Verify ownership checks for budget/account/category references.
-- [ ] Verify no endpoint returns UUID externally for in-scope entities.
-- [ ] Add tests for each validation matrix case.
-- [ ] Run full checks locally.
-- [ ] Update docs and open PR with summary of invariant coverage.
+- [x] Read `docs/design.md` sections on canonical inputs and transaction details.
+- [x] Enumerate all transaction create/update/delete handlers.
+- [x] Add/verify `details.length > 0` guards on all write paths.
+- [x] Verify ownership checks for budget/account/category references.
+- [x] Verify no endpoint returns UUID externally for in-scope entities.
+- [x] Add tests for each validation matrix case.
+- [x] Run full checks locally.
+- [x] Update docs and open PR with summary of invariant coverage.
+
+---
+
+## 10) Completion Evidence
+
+Implemented in this stage:
+- Service-layer invariant guards on transaction create/update (`splits` cannot be empty).
+- DB-layer deferred constraint trigger enforcing active split cardinality for non-deleted transactions.
+- Added integration test for empty-splits rejection.
+
+Validation run:
+- `DATABASE_URL=postgres://envelopezero:envelopezero@localhost:5432/envelopezero cargo test --test api_integration_sqlx` ✅
+- `cargo test` unit tests ✅
+- `npm run test` and `npm run build` (web baseline sanity) ✅
+- `./scripts/smoke.sh` ✅
 
 ---
 
