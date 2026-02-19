@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  api:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: envelopezero
+          POSTGRES_PASSWORD: envelopezero
+          POSTGRES_DB: envelopezero
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U envelopezero -d envelopezero"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgres://envelopezero:envelopezero@localhost:5432/envelopezero
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Check API
+        working-directory: apps/api
+        run: |
+          cargo fmt --check
+          cargo clippy -- -D warnings
+          cargo test
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Install and test web
+        working-directory: apps/web
+        run: |
+          npm ci
+          npm run test
+          npm run build

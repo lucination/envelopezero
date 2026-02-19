@@ -36,11 +36,29 @@ npm install
 npm run dev
 ```
 
-## Auth Model
+## Local quality gate
+
+We use a pre-commit hook + CI.
+
+One-time setup after cloning:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+Run full local checks manually:
+
+```bash
+./scripts/check.sh
+```
+
+## Auth model
 
 Users can have multiple auth methods and can add/remove methods.
 Constraint: each account must always keep **at least 1 active auth method**.
 
-Initial methods:
-- Magic link (email token)
-- Passkey (WebAuthn credential)
+Current methods:
+- Magic link (request + verify)
+- Passkey (registration challenge flow + credential persistence)
+
+> Note: WebAuthn cryptographic verification is scaffolded at the data-flow layer and is the next hardening step.

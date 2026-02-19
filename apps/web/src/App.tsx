@@ -30,8 +30,9 @@ export function App() {
         <p className="sub">Budgeting without passwords.</p>
 
         <form onSubmit={requestMagicLink}>
-          <label>Email</label>
+          <label htmlFor="email">Email</label>
           <input
+            id="email"
             type="email"
             placeholder="you@example.com"
             value={email}

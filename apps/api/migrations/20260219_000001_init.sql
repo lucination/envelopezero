@@ -12,8 +12,7 @@ create table if not exists auth_methods (
   method_type text not null check (method_type in ('magic_link_email', 'passkey')),
   label text,
   created_at timestamptz not null default now(),
-  disabled_at timestamptz,
-  unique (user_id, method_type, label)
+  disabled_at timestamptz
 );
 
 create table if not exists user_emails (
@@ -34,6 +33,16 @@ create table if not exists passkey_credentials (
   disabled_at timestamptz
 );
 
+create table if not exists passkey_challenges (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references users(id) on delete cascade,
+  challenge text not null,
+  purpose text not null check (purpose in ('register', 'authenticate')),
+  used_at timestamptz,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null
+);
+
 create table if not exists magic_link_tokens (
   id uuid primary key default gen_random_uuid(),
   email text not null,
@@ -43,7 +52,24 @@ create table if not exists magic_link_tokens (
   expires_at timestamptz not null
 );
 
--- Guardrail helper: must keep >=1 active auth method per user.
+create table if not exists sessions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references users(id) on delete cascade,
+  token_hash text not null unique,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null,
+  revoked_at timestamptz
+);
+
+create table if not exists email_outbox (
+  id uuid primary key default gen_random_uuid(),
+  to_email text not null,
+  subject text not null,
+  body text not null,
+  queued_at timestamptz not null default now(),
+  sent_at timestamptz
+);
+
 create or replace function assert_user_has_auth_method(p_user uuid)
 returns void language plpgsql as $$
 declare v_count int;

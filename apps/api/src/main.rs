@@ -1,38 +1,12 @@
 use std::{env, net::SocketAddr};
 
 use anyhow::Context;
-use axum::{
-    extract::State,
-    routing::{get, post},
-    Json, Router,
-};
-use serde::{Deserialize, Serialize};
-use sqlx::{postgres::PgPoolOptions, PgPool};
+use envelopezero_api::{router, AppState};
+use sqlx::postgres::PgPoolOptions;
 use tower_http::{
     cors::{Any, CorsLayer},
     trace::TraceLayer,
 };
-
-#[derive(Clone)]
-struct AppState {
-    db: PgPool,
-}
-
-#[derive(Serialize)]
-struct Health {
-    ok: bool,
-    service: &'static str,
-}
-
-#[derive(Deserialize)]
-struct MagicLinkRequest {
-    email: String,
-}
-
-#[derive(Serialize)]
-struct ApiMessage {
-    message: String,
-}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -61,10 +35,7 @@ async fn main() -> anyhow::Result<()> {
         .allow_methods(Any)
         .allow_headers(Any);
 
-    let app = Router::new()
-        .route("/health", get(health))
-        .route("/auth/magic-link/request", post(request_magic_link))
-        .with_state(AppState { db: pool })
+    let app = router(AppState { db: pool })
         .layer(cors)
         .layer(TraceLayer::new_for_http());
 
@@ -74,32 +45,4 @@ async fn main() -> anyhow::Result<()> {
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;
     Ok(())
-}
-
-async fn health() -> Json<Health> {
-    Json(Health {
-        ok: true,
-        service: "envelopezero-api",
-    })
-}
-
-async fn request_magic_link(
-    State(state): State<AppState>,
-    Json(payload): Json<MagicLinkRequest>,
-) -> Result<Json<ApiMessage>, axum::http::StatusCode> {
-    let email = payload.email.trim().to_lowercase();
-    if email.is_empty() || !email.contains('@') {
-        return Err(axum::http::StatusCode::BAD_REQUEST);
-    }
-
-    let _ = sqlx::query("insert into magic_link_tokens (email, token_hash, expires_at) values ($1, $2, now() + interval '15 minutes')")
-        .bind(&email)
-        .bind("placeholder_hash")
-        .execute(&state.db)
-        .await
-        .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    Ok(Json(ApiMessage {
-        message: "If this email is registered, a magic link will be sent.".into(),
-    }))
 }
