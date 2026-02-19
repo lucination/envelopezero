@@ -25,6 +25,36 @@ use sqlx::FromRow;
 use sqlx::PgPool;
 use uuid::Uuid;
 
+#[async_trait::async_trait]
+trait SessionLookup {
+    async fn lookup_user_id_by_token_hash(
+        &self,
+        token_hash: &str,
+    ) -> Result<Option<Uuid>, StatusCode>;
+}
+
+struct PgSessionLookup {
+    db: PgPool,
+}
+
+#[async_trait::async_trait]
+impl SessionLookup for PgSessionLookup {
+    async fn lookup_user_id_by_token_hash(
+        &self,
+        token_hash: &str,
+    ) -> Result<Option<Uuid>, StatusCode> {
+        let row: Option<(Uuid,)> = sqlx::query_as(
+            "select user_id from sessions where token_hash = $1 and revoked_at is null and expires_at > now()",
+        )
+        .bind(token_hash)
+        .fetch_optional(&self.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+        Ok(row.map(|r| r.0))
+    }
+}
+
 #[derive(Clone)]
 pub struct AppState {
     pub db: PgPool,
@@ -245,25 +275,32 @@ async fn passkey_disabled(State(state): State<AppState>) -> Result<StatusCode, S
     Err(StatusCode::NOT_FOUND)
 }
 
-async fn user_from_headers(state: &AppState, headers: &HeaderMap) -> Result<Uuid, StatusCode> {
+fn extract_bearer_token(headers: &HeaderMap) -> Result<&str, StatusCode> {
     let auth = headers
         .get(AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
         .ok_or(StatusCode::UNAUTHORIZED)?;
-    let token = auth
-        .strip_prefix("Bearer ")
-        .ok_or(StatusCode::UNAUTHORIZED)?;
+
+    auth.strip_prefix("Bearer ").ok_or(StatusCode::UNAUTHORIZED)
+}
+
+async fn user_from_headers(state: &AppState, headers: &HeaderMap) -> Result<Uuid, StatusCode> {
+    let token = extract_bearer_token(headers)?;
     let token_hash = sha256_hex(token);
+    let lookup = PgSessionLookup {
+        db: state.db.clone(),
+    };
+    user_from_token_hash(&lookup, &token_hash).await
+}
 
-    let row: Option<(Uuid,)> = sqlx::query_as(
-        "select user_id from sessions where token_hash = $1 and revoked_at is null and expires_at > now()",
-    )
-    .bind(token_hash)
-    .fetch_optional(&state.db)
-    .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    row.map(|r| r.0).ok_or(StatusCode::UNAUTHORIZED)
+async fn user_from_token_hash<L: SessionLookup + Sync>(
+    lookup: &L,
+    token_hash: &str,
+) -> Result<Uuid, StatusCode> {
+    lookup
+        .lookup_user_id_by_token_hash(token_hash)
+        .await?
+        .ok_or(StatusCode::UNAUTHORIZED)
 }
 
 #[derive(Serialize, FromRow)]
@@ -752,4 +789,50 @@ fn sha256_hex(value: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(value.as_bytes());
     format!("{:x}", hasher.finalize())
+}
+
+#[cfg(test)]
+mod unit_tests {
+    use super::*;
+
+    struct FakeLookup {
+        result: Option<Uuid>,
+    }
+
+    #[async_trait::async_trait]
+    impl SessionLookup for FakeLookup {
+        async fn lookup_user_id_by_token_hash(
+            &self,
+            _token_hash: &str,
+        ) -> Result<Option<Uuid>, StatusCode> {
+            Ok(self.result)
+        }
+    }
+
+    #[tokio::test]
+    async fn di_lookup_returns_user() {
+        let uid = Uuid::now_v7();
+        let lookup = FakeLookup { result: Some(uid) };
+        let got = user_from_token_hash(&lookup, "abc")
+            .await
+            .expect("user should be found");
+        assert_eq!(got, uid);
+    }
+
+    #[tokio::test]
+    async fn di_lookup_missing_is_unauthorized() {
+        let lookup = FakeLookup { result: None };
+        let err = user_from_token_hash(&lookup, "abc")
+            .await
+            .expect_err("missing session should fail");
+        assert_eq!(err, StatusCode::UNAUTHORIZED);
+    }
+
+    #[test]
+    fn bearer_parsing_works() {
+        let mut headers = HeaderMap::new();
+        headers.insert(AUTHORIZATION, "Bearer testtoken".parse().unwrap());
+        let token = extract_bearer_token(&headers).expect("token parsed");
+        assert_eq!(token, "testtoken");
+    }
 }

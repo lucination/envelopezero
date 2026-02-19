@@ -5,7 +5,7 @@ RUN npm ci
 COPY apps/web .
 RUN npm run build
 
-FROM rust:1.85 AS api-build
+FROM rust:1.88 AS api-build
 WORKDIR /app
 COPY Cargo.toml Cargo.lock ./
 COPY apps/api/Cargo.toml apps/api/Cargo.toml
