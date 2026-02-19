@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: envelopezero-postgres
+    environment:
+      POSTGRES_USER: envelopezero
+      POSTGRES_PASSWORD: envelopezero
+      POSTGRES_DB: envelopezero
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U envelopezero -d envelopezero"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  pgdata:
