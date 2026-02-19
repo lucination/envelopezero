@@ -17,30 +17,9 @@ create table if not exists auth_methods (
 
 create table if not exists user_emails (
   user_id uuid not null references users(id) on delete cascade,
-  email text not null,
+  email text not null unique,
   verified_at timestamptz,
   primary key (user_id, email)
-);
-
-create table if not exists passkey_credentials (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references users(id) on delete cascade,
-  credential_id text not null unique,
-  public_key text not null,
-  sign_count bigint not null default 0,
-  transports text[],
-  created_at timestamptz not null default now(),
-  disabled_at timestamptz
-);
-
-create table if not exists passkey_challenges (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references users(id) on delete cascade,
-  challenge text not null,
-  purpose text not null check (purpose in ('register', 'authenticate')),
-  used_at timestamptz,
-  created_at timestamptz not null default now(),
-  expires_at timestamptz not null
 );
 
 create table if not exists magic_link_tokens (
@@ -70,16 +49,91 @@ create table if not exists email_outbox (
   sent_at timestamptz
 );
 
-create or replace function assert_user_has_auth_method(p_user uuid)
-returns void language plpgsql as $$
-declare v_count int;
-begin
-  select count(*) into v_count
-  from auth_methods
-  where user_id = p_user and disabled_at is null;
+create table if not exists budgets (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references users(id) on delete cascade,
+  name text not null,
+  currency_code text not null default 'USD',
+  is_default boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz
+);
 
-  if v_count < 1 then
-    raise exception 'user % must have at least one active auth method', p_user;
-  end if;
-end;
-$$;
+create table if not exists accounts (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references users(id) on delete cascade,
+  budget_id uuid not null references budgets(id) on delete cascade,
+  name text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz,
+  unique(user_id, budget_id, name)
+);
+
+create table if not exists supercategories (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references users(id) on delete cascade,
+  budget_id uuid not null references budgets(id) on delete cascade,
+  name text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz
+);
+
+create table if not exists categories (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references users(id) on delete cascade,
+  budget_id uuid not null references budgets(id) on delete cascade,
+  supercategory_id uuid not null references supercategories(id) on delete cascade,
+  name text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz
+);
+
+create table if not exists transactions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references users(id) on delete cascade,
+  budget_id uuid not null references budgets(id) on delete cascade,
+  account_id uuid not null references accounts(id) on delete cascade,
+  tx_date date not null,
+  payee text,
+  memo text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz
+);
+
+create table if not exists transaction_splits (
+  id uuid primary key default gen_random_uuid(),
+  transaction_id uuid not null references transactions(id) on delete cascade,
+  category_id uuid not null references categories(id) on delete cascade,
+  memo text,
+  inflow bigint not null default 0,
+  outflow bigint not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz
+);
+
+create table if not exists passkey_credentials (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references users(id) on delete cascade,
+  credential_id text not null unique,
+  public_key text not null,
+  sign_count bigint not null default 0,
+  transports text[],
+  created_at timestamptz not null default now(),
+  disabled_at timestamptz
+);
+
+create table if not exists passkey_challenges (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references users(id) on delete cascade,
+  challenge text not null,
+  purpose text not null check (purpose in ('register', 'authenticate')),
+  used_at timestamptz,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null
+);

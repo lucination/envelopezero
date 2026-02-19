@@ -3,10 +3,11 @@ use std::net::SocketAddr;
 
 use anyhow::Context;
 use envelopezero_api::router;
+use envelopezero_api::seed_dev_data;
 use envelopezero_api::AppState;
 use sqlx::postgres::PgPoolOptions;
-use tower_http::cors::Any;
-use tower_http::cors::CorsLayer;
+use tower_http::services::ServeDir;
+use tower_http::services::ServeFile;
 use tower_http::trace::TraceLayer;
 
 #[tokio::main]
@@ -18,7 +19,12 @@ async fn main() -> anyhow::Result<()> {
 
     let database_url = env::var("DATABASE_URL").context("DATABASE_URL missing")?;
     let port: u16 = env::var("PORT").unwrap_or_else(|_| "8080".into()).parse()?;
-    let app_origin = env::var("APP_ORIGIN").unwrap_or_else(|_| "http://localhost:5173".into());
+    let app_origin = env::var("APP_ORIGIN").unwrap_or_else(|_| "http://localhost:8080".into());
+    let feature_passkeys =
+        env::var("FEATURE_PASSKEYS").unwrap_or_else(|_| "false".into()) == "true";
+    let feature_multi_budget =
+        env::var("FEATURE_MULTI_BUDGET").unwrap_or_else(|_| "false".into()) == "true";
+    let dev_seed = env::var("DEV_SEED").unwrap_or_else(|_| "true".into()) == "true";
 
     let pool = PgPoolOptions::new()
         .max_connections(10)
@@ -31,19 +37,27 @@ async fn main() -> anyhow::Result<()> {
         .await
         .context("failed to run migrations")?;
 
-    let cors = CorsLayer::new()
-        .allow_origin(app_origin.parse::<axum::http::HeaderValue>()?)
-        .allow_methods(Any)
-        .allow_headers(Any);
+    if dev_seed {
+        seed_dev_data(&pool).await.context("seed failed")?;
+    }
 
-    let app = router(AppState { db: pool })
-        .layer(cors)
+    let api_router = router(AppState {
+        db: pool,
+        feature_passkeys,
+        feature_multi_budget,
+        app_origin,
+    });
+
+    let web_dist = env::var("WEB_DIST_DIR").unwrap_or_else(|_| "apps/web/dist".into());
+    let app = api_router
+        .fallback_service(
+            ServeDir::new(web_dist).not_found_service(ServeFile::new("apps/web/dist/index.html")),
+        )
         .layer(TraceLayer::new_for_http());
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
-    tracing::info!(%addr, "api listening");
-
     let listener = tokio::net::TcpListener::bind(addr).await?;
+    tracing::info!(%addr, "envelopezero listening");
     axum::serve(listener, app).await?;
     Ok(())
 }
