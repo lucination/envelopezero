@@ -1,3 +1,5 @@
+pub mod models;
+
 use axum::extract::Path;
 use axum::extract::State;
 use axum::http::StatusCode;

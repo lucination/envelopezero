@@ -8,7 +8,9 @@ anyhow = "1"
 axum = { version = "0.7", features = ["macros"] }
 base64 = "0.22"
 chrono = { version = "0.4", features = ["serde"] }
+derive_builder = "0.20"
 dotenvy = "0.15"
+pillid = "0.3.3"
 rand = "0.8"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
