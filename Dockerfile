@@ -8,9 +8,6 @@ RUN npm run build
 FROM rust:1.88 AS api-build
 WORKDIR /app
 COPY Cargo.toml Cargo.lock ./
-COPY apps/api/Cargo.toml apps/api/Cargo.toml
-RUN mkdir -p apps/api/src && echo 'fn main(){}' > apps/api/src/main.rs && echo '' > apps/api/src/lib.rs
-RUN cargo build --release -p envelopezero-api || true
 COPY apps/api apps/api
 RUN cargo build --release -p envelopezero-api
 
