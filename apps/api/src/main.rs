@@ -24,6 +24,8 @@ async fn main() -> anyhow::Result<()> {
         env::var("FEATURE_PASSKEYS").unwrap_or_else(|_| "false".into()) == "true";
     let feature_multi_budget =
         env::var("FEATURE_MULTI_BUDGET").unwrap_or_else(|_| "false".into()) == "true";
+    let feature_assignments =
+        env::var("FEATURE_ASSIGNMENTS").unwrap_or_else(|_| "false".into()) == "true";
     let dev_seed = env::var("DEV_SEED").unwrap_or_else(|_| "true".into()) == "true";
     let smtp_host = env::var("SMTP_HOST").unwrap_or_else(|_| "mailpit".into());
     let smtp_port: u16 = env::var("SMTP_PORT")
@@ -51,6 +53,7 @@ async fn main() -> anyhow::Result<()> {
         db: pool,
         feature_passkeys,
         feature_multi_budget,
+        feature_assignments,
         app_origin,
         smtp_host,
         smtp_port,

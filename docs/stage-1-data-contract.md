@@ -182,3 +182,8 @@ Every PR in this stage should include:
 2. Which tests were added/updated
 3. Any DB vs service-layer tradeoff
 4. Any known risk not addressed yet
+
+## Implementation Evidence (2026-02-19 deep run)
+- Completed with concrete code/test updates in this branch.
+- Validation executed: ./scripts/check.sh, ./scripts/smoke.sh, npm run e2e.
+- See stage-tagged commits for exact diff and residuals.

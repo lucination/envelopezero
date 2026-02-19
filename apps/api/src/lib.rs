@@ -65,6 +65,7 @@ pub struct AppState {
     pub db: PgPool,
     pub feature_passkeys: bool,
     pub feature_multi_budget: bool,
+    pub feature_assignments: bool,
     pub app_origin: String,
     pub smtp_host: String,
     pub smtp_port: u16,
@@ -110,6 +111,11 @@ pub fn router(state: AppState) -> Router {
             put(update_transaction).delete(delete_transaction),
         )
         .route("/api/dashboard", get(dashboard))
+        .route("/api/projections/month/:month", get(month_projection))
+        .route(
+            "/api/category-assignments",
+            get(list_category_assignments).post(create_category_assignment),
+        )
         .with_state(state)
 }
 
@@ -576,6 +582,26 @@ struct SplitInput {
     inflow: i64,
     outflow: i64,
 }
+
+fn validate_splits(splits: &[SplitInput]) -> Result<(), StatusCode> {
+    if splits.is_empty() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    for split in splits {
+        if split.inflow < 0 || split.outflow < 0 {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+        if split.inflow > 0 && split.outflow > 0 {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+        if split.inflow == 0 && split.outflow == 0 {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    }
+
+    Ok(())
+}
 #[derive(Deserialize)]
 struct SaveTransaction {
     budget_id: String,
@@ -644,9 +670,7 @@ async fn create_transaction(
     headers: HeaderMap,
     Json(payload): Json<SaveTransaction>,
 ) -> Result<Json<TransactionDto>, StatusCode> {
-    if payload.splits.is_empty() {
-        return Err(StatusCode::BAD_REQUEST);
-    }
+    validate_splits(&payload.splits)?;
 
     let user_id = user_from_headers(&state, &headers).await?;
     let mut tx = state
@@ -682,9 +706,7 @@ async fn update_transaction(
     Path(id): Path<String>,
     Json(payload): Json<SaveTransaction>,
 ) -> Result<Json<TransactionDto>, StatusCode> {
-    if payload.splits.is_empty() {
-        return Err(StatusCode::BAD_REQUEST);
-    }
+    validate_splits(&payload.splits)?;
 
     let user_id = user_from_headers(&state, &headers).await?;
     let mut tx = state
@@ -772,6 +794,145 @@ async fn dashboard(
     Ok(Json(
         compute_dashboard_projection(&state.db, user_id).await?,
     ))
+}
+
+#[derive(Serialize, FromRow)]
+struct CategoryProjectionDto {
+    category_id: String,
+    assigned: i64,
+    activity: i64,
+    available: i64,
+}
+
+#[derive(Deserialize)]
+struct SaveCategoryAssignment {
+    budget_id: String,
+    category_id: String,
+    month: String,
+    amount: i64,
+}
+
+#[derive(Serialize, FromRow)]
+struct CategoryAssignmentDto {
+    id: String,
+    budget_id: String,
+    category_id: String,
+    month: String,
+    amount: i64,
+}
+
+fn parse_projection_month(month: &str) -> Result<NaiveDate, StatusCode> {
+    let stamped = format!("{month}-01");
+    NaiveDate::parse_from_str(&stamped, "%Y-%m-%d").map_err(|_| StatusCode::BAD_REQUEST)
+}
+
+async fn month_projection(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(month): Path<String>,
+) -> Result<Json<Vec<CategoryProjectionDto>>, StatusCode> {
+    let user_id = user_from_headers(&state, &headers).await?;
+    let period = parse_projection_month(&month)?;
+
+    let categories: Vec<(String, Uuid)> = sqlx::query_as(
+        "select pillid, id from categories where user_id = $1 and deleted_at is null order by created_at",
+    )
+    .bind(user_id)
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_default();
+
+    let mut rows = Vec::with_capacity(categories.len());
+    for (category_pillid, category_id) in categories {
+        let (assigned,): (i64,) = sqlx::query_as(
+            "select coalesce(sum(amount), 0)::bigint from category_assignments where category_id = $1 and month = $2 and deleted_at is null",
+        )
+        .bind(category_id)
+        .bind(period)
+        .fetch_one(&state.db)
+        .await
+        .unwrap_or((0,));
+
+        let (activity,): (i64,) = sqlx::query_as(
+            "select coalesce(sum(ts.outflow - ts.inflow), 0)::bigint
+             from transaction_splits ts
+             join transactions t on t.id = ts.transaction_id
+             where ts.category_id = $1
+               and ts.deleted_at is null
+               and t.deleted_at is null
+               and date_trunc('month', t.tx_date::timestamp)::date = $2",
+        )
+        .bind(category_id)
+        .bind(period)
+        .fetch_one(&state.db)
+        .await
+        .unwrap_or((0,));
+
+        rows.push(CategoryProjectionDto {
+            category_id: category_pillid,
+            assigned,
+            activity,
+            available: assigned - activity,
+        });
+    }
+
+    Ok(Json(rows))
+}
+
+async fn list_category_assignments(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<Vec<CategoryAssignmentDto>>, StatusCode> {
+    if !state.feature_assignments {
+        return Err(StatusCode::NOT_FOUND);
+    }
+
+    let user_id = user_from_headers(&state, &headers).await?;
+    let rows = sqlx::query_as::<_, CategoryAssignmentDto>(
+        "select pillid as id, budget_pillid as budget_id, category_pillid as category_id, to_char(month, 'YYYY-MM') as month, amount
+         from category_assignments
+         where user_id = $1 and deleted_at is null
+         order by month desc, created_at desc",
+    )
+    .bind(user_id)
+    .fetch_all(&state.db)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(rows))
+}
+
+async fn create_category_assignment(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<SaveCategoryAssignment>,
+) -> Result<Json<CategoryAssignmentDto>, StatusCode> {
+    if !state.feature_assignments {
+        return Err(StatusCode::NOT_FOUND);
+    }
+
+    let user_id = user_from_headers(&state, &headers).await?;
+    let period = parse_projection_month(&payload.month)?;
+
+    let row = sqlx::query_as::<_, CategoryAssignmentDto>(
+        "insert into category_assignments (user_id, user_pillid, budget_id, budget_pillid, category_id, category_pillid, month, amount)
+         select u.id, u.pillid, b.id, b.pillid, c.id, c.pillid, $4, $5
+         from users u
+         join budgets b on b.pillid = $2 and b.user_id = u.id and b.deleted_at is null
+         join categories c on c.pillid = $3 and c.user_id = u.id and c.budget_id = b.id and c.deleted_at is null
+         where u.id = $1
+         returning pillid as id, budget_pillid as budget_id, category_pillid as category_id, to_char(month, 'YYYY-MM') as month, amount",
+    )
+    .bind(user_id)
+    .bind(payload.budget_id)
+    .bind(payload.category_id)
+    .bind(period)
+    .bind(payload.amount)
+    .fetch_one(&state.db)
+    .await
+    .map_err(|_| StatusCode::BAD_REQUEST)?;
+
+    Ok(Json(row))
 }
 
 pub async fn seed_dev_data(pool: &PgPool) -> anyhow::Result<()> {
@@ -894,5 +1055,38 @@ mod unit_tests {
     fn dashboard_projection_is_deterministic() {
         assert_eq!(project_available(4_500, 1_200), 3_300);
         assert_eq!(project_available(4_500, 1_200), 3_300);
+    }
+
+    #[test]
+    fn split_validation_rejects_invalid_cases() {
+        assert!(validate_splits(&[]).is_err());
+        assert!(validate_splits(&[SplitInput {
+            category_id: "c".into(),
+            memo: None,
+            inflow: -1,
+            outflow: 0
+        }])
+        .is_err());
+        assert!(validate_splits(&[SplitInput {
+            category_id: "c".into(),
+            memo: None,
+            inflow: 1,
+            outflow: 1
+        }])
+        .is_err());
+        assert!(validate_splits(&[SplitInput {
+            category_id: "c".into(),
+            memo: None,
+            inflow: 0,
+            outflow: 0
+        }])
+        .is_err());
+    }
+
+    #[test]
+    fn month_parse_accepts_iso_yyyy_mm() {
+        let d = parse_projection_month("2026-02").unwrap();
+        assert_eq!(d.format("%Y-%m-%d").to_string(), "2026-02-01");
+        assert!(parse_projection_month("2026/02").is_err());
     }
 }
