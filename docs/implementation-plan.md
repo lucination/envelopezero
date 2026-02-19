@@ -14,7 +14,9 @@ Guiding constraints:
 
 ---
 
-## Stage 1 — Data Contract Stabilization (Foundation)
+## Stage 1 — Data Contract Stabilization (Foundation) ✅
+
+Detailed scope/evidence: `docs/stage-1-data-contract.md`
 
 ### Purpose
 Protect canonical user-entered facts as the long-term source of truth.
@@ -41,7 +43,9 @@ If this layer is clean, derived math and UX can evolve safely.
 
 ---
 
-## Stage 2 — Core Workflow Reliability (MVP Usability Core)
+## Stage 2 — Core Workflow Reliability (MVP Usability Core) ✅
+
+Detailed scope/evidence: `docs/stage-2-core-workflow.md`
 
 ### Purpose
 Make the daily workflow dependable before visual polish.
@@ -64,7 +68,9 @@ Behavioral trust is required before deeper features.
 
 ---
 
-## Stage 3 — Derived Projection Hardening (Evolvable, not rigid)
+## Stage 3 — Derived Projection Hardening (Evolvable, not rigid) ✅
+
+Detailed scope/evidence: `docs/stage-3-derived-projection.md`
 
 ### Purpose
 Provide reliable computed values now without overcommitting to final accounting semantics.
@@ -86,7 +92,9 @@ Delivers value now while preserving freedom to improve formulas later.
 
 ---
 
-## Stage 4 — UX Coherence Pass (Product Feel)
+## Stage 4 — UX Coherence Pass (Product Feel) ✅
+
+Detailed scope/evidence: `docs/stage-4-ux-coherence.md`
 
 ### Purpose
 Move from “functional prototype” to “clean MVP experience”.
@@ -115,7 +123,9 @@ UX coherence is required for adoption and retention.
 
 ---
 
-## Stage 5 — QA Discipline and Release Safety
+## Stage 5 — QA Discipline and Release Safety ✅
+
+Detailed scope/evidence: `docs/stage-5-qa-release-safety.md`
 
 ### Purpose
 Sustain velocity while preventing regressions.
@@ -142,7 +152,9 @@ Makes fast iteration safe and repeatable.
 
 ---
 
-## Stage 6 — Next-Layer Capability (Signal-driven)
+## Stage 6 — Next-Layer Capability (Signal-driven) ✅ (governance complete; feature expansion deferred by signal)
+
+Detailed scope/evidence: `docs/stage-6-next-layer-capability.md`
 
 ### Purpose
 Add depth based on usage signal, not speculative complexity.
