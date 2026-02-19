@@ -18,10 +18,18 @@ test('core flow with projection and coherent UI', async ({ page }) => {
   await page.reload()
 
   await expect(page.getByText('Dashboard')).toBeVisible()
+  await page.screenshot({ path: 'docs/assets/ui-shell-desktop.png', fullPage: true })
+
+  await page.getByRole('button', { name: 'Add transaction' }).click()
   await page.getByLabel('Payee').fill('Market')
   await page.getByLabel('Outflow').fill('2500')
   await page.getByRole('button', { name: 'Create transaction' }).click()
 
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.screenshot({ path: 'docs/assets/ui-shell-mobile.png', fullPage: true })
+
+  await page.setViewportSize({ width: 1280, height: 720 })
+  await page.getByRole('button', { name: 'Budget' }).click()
   await expect(page.getByTestId('dashboard-totals')).toBeVisible()
   await expect(page).toHaveScreenshot('stage4-coherent-ui.png', { fullPage: true })
 })
