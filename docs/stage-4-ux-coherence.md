@@ -21,3 +21,8 @@
 
 ## Outcome
 Stage 4 MVP coherence baseline is achieved (clean functional MVP, not design-final polish).
+
+## Implementation Evidence (2026-02-19 deep run)
+- Completed with concrete code/test updates in this branch.
+- Validation executed: ./scripts/check.sh, ./scripts/smoke.sh, npm run e2e.
+- See stage-tagged commits for exact diff and residuals.
