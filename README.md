@@ -38,7 +38,7 @@ npm run dev
 
 ## Local quality gate
 
-We use **Husky pre-commit hooks + CI**.
+We use **Husky hooks + CI** (pre-commit checks + commit message lint).
 
 One-time setup after cloning:
 
