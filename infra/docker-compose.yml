@@ -1,4 +1,22 @@
 services:
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: envelopezero-app
+    environment:
+      PORT: 8080
+      DATABASE_URL: postgres://envelopezero:envelopezero@postgres:5432/envelopezero
+      APP_ORIGIN: http://localhost:8080
+      FEATURE_PASSKEYS: "false"
+      FEATURE_MULTI_BUDGET: "false"
+      DEV_SEED: "true"
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   postgres:
     image: postgres:16
     container_name: envelopezero-postgres
@@ -15,6 +33,13 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: envelopezero-mailpit
+    ports:
+      - "8025:8025"
+      - "1025:1025"
 
 volumes:
   pgdata:
