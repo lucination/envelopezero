@@ -26,11 +26,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt
       - uses: Swatinem/rust-cache@v2
       - name: Check API
         working-directory: apps/api
         run: |
-          cargo fmt --check
+          cargo +nightly fmt --check
           cargo clippy -- -D warnings
           cargo test
 

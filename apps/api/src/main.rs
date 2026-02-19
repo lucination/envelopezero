@@ -1,12 +1,13 @@
-use std::{env, net::SocketAddr};
+use std::env;
+use std::net::SocketAddr;
 
 use anyhow::Context;
-use envelopezero_api::{router, AppState};
+use envelopezero_api::router;
+use envelopezero_api::AppState;
 use sqlx::postgres::PgPoolOptions;
-use tower_http::{
-    cors::{Any, CorsLayer},
-    trace::TraceLayer,
-};
+use tower_http::cors::Any;
+use tower_http::cors::CorsLayer;
+use tower_http::trace::TraceLayer;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

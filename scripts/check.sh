@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 pushd "$ROOT/apps/api" >/dev/null
-cargo fmt --check
+cargo +nightly fmt --check
 cargo clippy -- -D warnings
 cargo test
 popd >/dev/null

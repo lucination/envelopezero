@@ -38,12 +38,13 @@ npm run dev
 
 ## Local quality gate
 
-We use a pre-commit hook + CI.
+We use **Husky pre-commit hooks + CI**.
 
 One-time setup after cloning:
 
 ```bash
-git config core.hooksPath .githooks
+npm install
+rustup toolchain install nightly --component rustfmt
 ```
 
 Run full local checks manually:
@@ -51,6 +52,10 @@ Run full local checks manually:
 ```bash
 ./scripts/check.sh
 ```
+
+> Formatting uses nightly rustfmt with:
+> - `group_imports = "StdExternalCrate"`
+> - `imports_granularity = "Item"` (one import per line)
 
 ## Auth model
 

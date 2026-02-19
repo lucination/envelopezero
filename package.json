@@ -1,0 +1,12 @@
+{
+  "name": "envelopezero",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "prepare": "husky",
+    "check": "./scripts/check.sh"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7"
+  }
+}
