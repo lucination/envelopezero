@@ -52,6 +52,13 @@ export function App() {
   }, [])
 
   useEffect(() => {
+    if (!tokenInput || session) return
+    verifyTokenValue(tokenInput).catch(() => {
+      setNotice('Token invalid or expired')
+    })
+  }, [tokenInput, session])
+
+  useEffect(() => {
     if (!session) return
     localStorage.setItem('ez_session', JSON.stringify(session))
     refresh(session.token)
@@ -86,19 +93,24 @@ export function App() {
     setNotice(`Mail sent. Dev token: ${data.debug_token ?? 'check Mailpit'}`)
   }
 
-  async function verifyToken(e: React.FormEvent) {
-    e.preventDefault()
+  async function verifyTokenValue(token: string) {
     const res = await fetch(`${API}/auth/magic-link/verify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: tokenInput }),
+      body: JSON.stringify({ token }),
     })
-    if (!res.ok) {
-      setNotice('Token invalid or expired')
-      return
-    }
+    if (!res.ok) throw new Error('invalid token')
     setSession(await res.json())
     setNotice('Signed in')
+  }
+
+  async function verifyToken(e: React.FormEvent) {
+    e.preventDefault()
+    try {
+      await verifyTokenValue(tokenInput)
+    } catch {
+      setNotice('Token invalid or expired')
+    }
   }
 
   if (!session) {
