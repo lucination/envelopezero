@@ -15,6 +15,11 @@ use base64::Engine;
 use chrono::Duration;
 use chrono::NaiveDate;
 use chrono::Utc;
+use lettre::message::Mailbox;
+use lettre::AsyncSmtpTransport;
+use lettre::AsyncTransport;
+use lettre::Message;
+use lettre::Tokio1Executor;
 use rand::rngs::OsRng;
 use rand::RngCore;
 use serde::Deserialize;
@@ -61,6 +66,9 @@ pub struct AppState {
     pub feature_passkeys: bool,
     pub feature_multi_budget: bool,
     pub app_origin: String,
+    pub smtp_host: String,
+    pub smtp_port: u16,
+    pub smtp_from: String,
 }
 
 pub fn router(state: AppState) -> Router {
@@ -156,13 +164,16 @@ async fn request_magic_link(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
+    let body = format!("Click to sign in: {magic_url}");
     sqlx::query("insert into email_outbox (to_email, subject, body) values ($1, $2, $3)")
         .bind(&email)
         .bind("Your EnvelopeZero sign-in link")
-        .bind(format!("Click to sign in: {magic_url}"))
+        .bind(&body)
         .execute(&state.db)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let _ = send_magic_link_email(&state, &email, &body).await;
 
     Ok(Json(MagicLinkRequestResponse {
         message: "If this email is registered, a magic link will be sent.".into(),
@@ -721,7 +732,7 @@ async fn dashboard(
 ) -> Result<Json<DashboardDto>, StatusCode> {
     let user_id = user_from_headers(&state, &headers).await?;
     let (inflow, outflow): (i64, i64) = sqlx::query_as(
-        "select coalesce(sum(ts.inflow),0) as inflow, coalesce(sum(ts.outflow),0) as outflow from transactions t join transaction_splits ts on ts.transaction_id=t.id where t.user_id=$1 and t.deleted_at is null and ts.deleted_at is null",
+        "select coalesce(sum(ts.inflow),0)::bigint as inflow, coalesce(sum(ts.outflow),0)::bigint as outflow from transactions t join transaction_splits ts on ts.transaction_id=t.id where t.user_id=$1 and t.deleted_at is null and ts.deleted_at is null",
     )
     .bind(user_id)
     .fetch_one(&state.db)
@@ -776,6 +787,22 @@ pub async fn seed_dev_data(pool: &PgPool) -> anyhow::Result<()> {
         .bind(user_id).bind(budget_id).execute(&mut *tx).await?;
 
     tx.commit().await?;
+    Ok(())
+}
+
+async fn send_magic_link_email(state: &AppState, to_email: &str, body: &str) -> anyhow::Result<()> {
+    let from: Mailbox = state.smtp_from.parse()?;
+    let to: Mailbox = to_email.parse()?;
+    let email = Message::builder()
+        .from(from)
+        .to(to)
+        .subject("Your EnvelopeZero sign-in link")
+        .body(body.to_string())?;
+
+    let mailer = AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(state.smtp_host.clone())
+        .port(state.smtp_port)
+        .build();
+    mailer.send(email).await?;
     Ok(())
 }
 

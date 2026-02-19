@@ -11,6 +11,9 @@ services:
       FEATURE_PASSKEYS: "false"
       FEATURE_MULTI_BUDGET: "false"
       DEV_SEED: "true"
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
+      SMTP_FROM: noreply@envelopezero.local
     ports:
       - "${TAILSCALE_IP:-127.0.0.1}:8080:8080"
     depends_on:

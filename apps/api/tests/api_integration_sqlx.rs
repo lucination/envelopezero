@@ -15,6 +15,9 @@ async fn health_endpoint_is_ok(pool: PgPool) {
         feature_passkeys: false,
         feature_multi_budget: false,
         app_origin: "http://localhost:8080".to_string(),
+        smtp_host: "127.0.0.1".to_string(),
+        smtp_port: 1025,
+        smtp_from: "noreply@envelopezero.local".to_string(),
     });
 
     let response = app
@@ -37,6 +40,9 @@ async fn magic_link_request_writes_outbox(pool: PgPool) {
         feature_passkeys: false,
         feature_multi_budget: false,
         app_origin: "http://localhost:8080".to_string(),
+        smtp_host: "127.0.0.1".to_string(),
+        smtp_port: 1025,
+        smtp_from: "noreply@envelopezero.local".to_string(),
     });
 
     let req = Request::builder()

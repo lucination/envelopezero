@@ -25,6 +25,12 @@ async fn main() -> anyhow::Result<()> {
     let feature_multi_budget =
         env::var("FEATURE_MULTI_BUDGET").unwrap_or_else(|_| "false".into()) == "true";
     let dev_seed = env::var("DEV_SEED").unwrap_or_else(|_| "true".into()) == "true";
+    let smtp_host = env::var("SMTP_HOST").unwrap_or_else(|_| "mailpit".into());
+    let smtp_port: u16 = env::var("SMTP_PORT")
+        .unwrap_or_else(|_| "1025".into())
+        .parse()
+        .unwrap_or(1025);
+    let smtp_from = env::var("SMTP_FROM").unwrap_or_else(|_| "noreply@envelopezero.local".into());
 
     let pool = PgPoolOptions::new()
         .max_connections(10)
@@ -46,6 +52,9 @@ async fn main() -> anyhow::Result<()> {
         feature_passkeys,
         feature_multi_budget,
         app_origin,
+        smtp_host,
+        smtp_port,
+        smtp_from,
     });
 
     let web_dist = env::var("WEB_DIST_DIR").unwrap_or_else(|_| "apps/web/dist".into());

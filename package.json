@@ -5,11 +5,14 @@
   "scripts": {
     "prepare": "husky",
     "check": "./scripts/check.sh",
+    "e2e": "playwright test",
+    "smoke": "./scripts/smoke.sh",
     "commitlint": "commitlint --from=HEAD~10 --to=HEAD"
   },
   "devDependencies": {
-    "husky": "^9.1.7",
     "@commitlint/cli": "^19.8.0",
-    "@commitlint/config-conventional": "^19.8.0"
+    "@commitlint/config-conventional": "^19.8.0",
+    "@playwright/test": "^1.58.2",
+    "husky": "^9.1.7"
   }
 }

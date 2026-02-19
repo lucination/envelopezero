@@ -68,3 +68,47 @@ All under `/api`:
 ```
 
 Includes rustfmt + clippy + tests and web tests/build.
+
+## Deterministic smoke + browser E2E runbook
+
+Start clean stack:
+```bash
+docker compose -f infra/docker-compose.yml down -v
+docker compose -f infra/docker-compose.yml up --build -d
+```
+
+Install browser test deps once:
+```bash
+cd apps/web
+npm ci
+npx playwright install --with-deps chromium
+```
+
+Run API smoke (health/auth/budgets + Mailpit delivery):
+```bash
+cd ../..
+./scripts/smoke.sh
+```
+
+Run full browser MVP E2E:
+```bash
+npm run e2e
+```
+
+MVP E2E coverage includes:
+- magic-link request + verify (token sourced from Mailpit API)
+- callback/session persistence + logout
+- budget single-default mode + multi-budget conflict gating
+- accounts, supercategories, categories, transactions CRUD
+- dashboard total recalculation after tx create/update/delete
+- empty-state visibility checks
+- mobile viewport sanity check (390x844)
+
+### TailScale-bound URL checks
+Compose binds app/mailpit to `${TAILSCALE_IP:-127.0.0.1}`. To test over your TailScale IP:
+```bash
+export TAILSCALE_IP=100.x.y.z
+docker compose -f infra/docker-compose.yml up --build -d
+EZ_APP_URL="http://$TAILSCALE_IP:8080" EZ_MAILPIT_URL="http://$TAILSCALE_IP:8025" ./scripts/smoke.sh
+EZ_APP_URL="http://$TAILSCALE_IP:8080" EZ_MAILPIT_URL="http://$TAILSCALE_IP:8025" npm run e2e
+```
