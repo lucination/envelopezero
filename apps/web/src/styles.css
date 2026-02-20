@@ -23,8 +23,8 @@ body {
 }
 
 .ez-panel {
-  backdrop-filter: blur(4px);
-  background-color: hsl(224 24% 11% / 0.35);
+  backdrop-filter: none;
+  background-color: transparent;
 }
 
 .ez-table thead {
@@ -55,18 +55,16 @@ body {
 
 .mobile-nav {
   position: fixed;
-  left: 0.75rem;
-  right: 0.75rem;
-  bottom: max(0.75rem, env(safe-area-inset-bottom));
-  @apply z-30 grid grid-cols-5 rounded-[1.4rem] border border-white/15 bg-card/80 p-2 shadow-2xl;
-  backdrop-filter: blur(18px);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  @apply z-30 grid grid-cols-5 border-t border-white/10 bg-background/95 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1;
 }
 
 .mobile-nav-item {
-  @apply flex flex-col items-center justify-center gap-1 rounded-xl py-1 text-[10px] font-semibold text-muted-foreground transition;
+  @apply flex flex-col items-center justify-center gap-1 py-1 text-[10px] font-semibold text-muted-foreground transition;
 }
 
 .mobile-nav-item-active {
-  @apply bg-primary/25 text-primary;
-  box-shadow: inset 0 0 0 1px hsl(207 92% 67% / 0.4), 0 0 12px hsl(207 92% 67% / 0.35);
+  @apply text-primary;
 }
