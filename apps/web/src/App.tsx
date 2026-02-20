@@ -118,17 +118,17 @@ export function App() {
 
   if (!session) return <main className="min-h-screen p-4 sm:grid sm:place-items-center"><Card className="mx-auto w-full max-w-md border-white/10"><CardHeader><CardTitle className="font-brand text-3xl">EnvelopeZero</CardTitle><p className="text-sm text-muted-foreground">Professional zero-based budgeting.</p></CardHeader><CardContent className="space-y-3"><form className="space-y-2" onSubmit={requestMagicLink}><Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" aria-label="Email" /><Button className="w-full">Send magic link</Button></form><form className="space-y-2" onSubmit={verifyToken}><Input value={tokenInput} onChange={(e) => setTokenInput(e.target.value)} placeholder="Paste token" aria-label="Token" /><Button variant="secondary" className="w-full">Verify token</Button></form><p className="text-xs text-muted-foreground">{notice || 'Sign in to continue'}</p></CardContent></Card><ToastViewport toasts={toasts} /></main>
 
-  return <div className="min-h-screen md:grid md:grid-cols-[220px_1fr_280px] md:gap-3 md:p-3">
-    <aside className="ez-panel hidden rounded-2xl border border-white/10 p-4 shadow-2xl md:block">
-      <h2 className="font-brand text-3xl font-bold">EnvelopeZero</h2>
-      <p className="mb-4 mt-1 text-xs uppercase tracking-[0.2em] text-muted-foreground">Budget Workspace</p>
-      <nav className="space-y-1" aria-label="Primary">
+  return <div className="min-h-screen md:grid md:grid-cols-[188px_1fr_232px] md:gap-2 md:p-2">
+    <aside className="ez-panel hidden rounded-md border border-white/10 p-3 md:block">
+      <h2 className="font-brand text-[1.7rem] font-bold leading-none">EnvelopeZero</h2>
+      <p className="mb-3 mt-0.5 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Budget Workspace</p>
+      <nav className="space-y-0.5" aria-label="Primary">
         {tabs.map((tab) => <Button key={tab.id} variant={activeTab === tab.id ? 'default' : 'ghost'} className={cn('w-full justify-start', activeTab === tab.id && 'shadow-glow')} onClick={() => setActiveTab(tab.id)}>{tab.icon}{tab.label}</Button>)}
       </nav>
     </aside>
 
-    <main className="p-3 pb-36 md:p-0 md:pb-0">
-      <header className="ez-panel mb-3 hidden items-center justify-between rounded-2xl border border-white/10 px-4 py-3 shadow-2xl md:flex">
+    <main className="p-2 pb-32 md:p-0 md:pb-0">
+      <header className="mb-2 hidden items-center justify-between border-b border-white/10 px-1 pb-2 pt-1 md:flex">
         <div>
           <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">{activeBudget?.name || 'No budget'}</p>
           <h1 className="font-brand text-3xl">{tabs.find((t) => t.id === activeTab)?.label}</h1>
@@ -140,35 +140,35 @@ export function App() {
         </div>
       </header>
 
-      <header className="mb-3 md:hidden">
-        <div className="ez-panel flex items-center justify-between rounded-2xl border border-white/10 px-3 py-2">
+      <header className="mb-2 md:hidden">
+        <div className="flex items-center justify-between border-b border-white/10 px-1 pb-2">
           <button className="ios-icon-btn" onClick={() => setMonth((m) => monthShift(m, -1))} aria-label="Previous month"><ArrowLeft className="h-4 w-4" /></button>
           <p className="text-sm font-semibold tracking-wide">{month}</p>
           <button className="ios-icon-btn" onClick={() => setMonth((m) => monthShift(m, 1))} aria-label="Next month"><ArrowRight className="h-4 w-4" /></button>
         </div>
       </header>
 
-      {activeTab === 'budget' && <section className="space-y-3" data-testid="budget-workspace">
-        <Card data-testid="dashboard-totals" className="border-white/10"><CardContent className="grid gap-3 p-4 md:grid-cols-[1fr_auto]">
+      {activeTab === 'budget' && <section className="space-y-2" data-testid="budget-workspace">
+        <div data-testid="dashboard-totals" className="grid gap-2 border-b border-white/10 pb-2 md:grid-cols-[1fr_auto]">
           <div><p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Ready to Assign</p><p data-testid="ready-to-assign" className={cn('text-3xl font-extrabold', readyToAssign < 0 ? 'text-danger' : 'text-success')}>{currency(readyToAssign)}</p></div>
           <div className="hidden items-center gap-2 md:flex"><Button variant="outline" size="sm" onClick={() => setMonth((m) => monthShift(m, -1))}><ArrowLeft className="h-4 w-4" />Previous</Button><span className="w-20 text-center text-sm font-bold">{month}</span><Button variant="outline" size="sm" onClick={() => setMonth((m) => monthShift(m, 1))}>Next<ArrowRight className="h-4 w-4" /></Button></div>
           <div className="flex gap-2 md:col-span-2"><Badge variant="outline">{budgetRows.length} categories</Badge><Badge variant="outline">{overspentRows.length} overspent</Badge></div>
-        </CardContent></Card>
+        </div>
 
-        {overspentRows.length > 0 && <Card className="border-rose-400/30 bg-rose-500/10"><CardContent className="flex items-center justify-between p-3"><div><p className="text-xs uppercase tracking-[0.18em] text-rose-300">Overspent</p><p className="text-sm text-rose-100">{overspentRows[0].categoryName} needs coverage.</p></div><button className="rounded-full border border-rose-300/50 bg-rose-500/20 px-3 py-1 text-xs font-semibold text-rose-100">Cover</button></CardContent></Card>}
+        {overspentRows.length > 0 && <div className="flex items-center justify-between border-l-2 border-rose-400/60 bg-rose-500/10 px-2 py-1.5"><div><p className="text-[10px] uppercase tracking-[0.14em] text-rose-300">Overspent</p><p className="text-xs text-rose-100">{overspentRows[0].categoryName} needs coverage.</p></div><button className="rounded-md bg-rose-500/25 px-2 py-0.5 text-[11px] font-semibold text-rose-100">Cover</button></div>}
 
-        <Card className="hidden border-white/10 md:block"><CardContent className="overflow-x-auto p-0"><table className="ez-table min-w-full text-sm"><thead className="bg-muted/70 text-muted-foreground"><tr><th className="px-4 py-2 text-left text-[11px] font-bold uppercase tracking-[0.16em]">Category</th><th className="px-4 py-2 text-right text-[11px] font-bold uppercase tracking-[0.16em]">Assigned</th><th className="px-4 py-2 text-right text-[11px] font-bold uppercase tracking-[0.16em]">Activity</th><th className="px-4 py-2 text-right text-[11px] font-bold uppercase tracking-[0.16em]">Available</th></tr></thead><tbody>
+        <div className="hidden overflow-x-auto md:block"><table className="ez-table min-w-full text-[13px]"><thead className="border-b border-white/10 text-muted-foreground"><tr><th className="px-3 py-1.5 text-left text-[10px] font-bold uppercase tracking-[0.14em]">Category</th><th className="px-3 py-1.5 text-right text-[10px] font-bold uppercase tracking-[0.14em]">Assigned</th><th className="px-3 py-1.5 text-right text-[10px] font-bold uppercase tracking-[0.14em]">Activity</th><th className="px-3 py-1.5 text-right text-[10px] font-bold uppercase tracking-[0.14em]">Available</th></tr></thead><tbody>
           {groupedRows.map((group) => <Fragment key={group.id}>
-            <tr className="bg-muted/30"><td colSpan={4} className="px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.2em] text-muted-foreground">{group.name}</td></tr>
-            {group.rows.map((row) => { const isSelected = selectedCategoryId === row.categoryId; const isEditing = editingCategoryId === row.categoryId; return <tr key={row.categoryId} data-testid={`budget-row-${row.categoryId}`} onClick={() => setSelectedCategoryId(row.categoryId)} className={cn('ez-row border-t border-white/5 cursor-pointer', isSelected && 'bg-muted/70')}><td className="px-4 py-2"><div className="flex items-center gap-2"><span className="font-semibold">{row.categoryName}</span>{row.available < 0 && <Badge variant="danger">Overspent</Badge>}</div></td><td className="px-4 py-2 text-right">{isEditing ? <div className="ml-auto flex max-w-[240px] items-center gap-2"><Input aria-label={`Assigned amount for ${row.categoryName}`} type="number" value={editingAmount} onChange={(e) => setEditingAmount(e.target.value)} /><Button size="sm" onClick={(e) => { e.stopPropagation(); saveAssignment(row.categoryId, Number(editingAmount)) }} disabled={!assignmentsEnabled}>Save</Button></div> : <button className="rounded px-2 py-1 font-bold text-primary transition hover:bg-primary/10 disabled:text-muted-foreground" disabled={!assignmentsEnabled} onClick={(e) => { e.stopPropagation(); setEditingCategoryId(row.categoryId); setEditingAmount(String(row.assigned)) }}>{currency(row.assigned)}</button>}</td><td className="px-4 py-2 text-right text-muted-foreground">{currency(row.activity)}</td><td className="px-4 py-2 text-right"><AvailabilityChip amount={row.available} /></td></tr> })}
+            <tr><td colSpan={4} className="px-3 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">{group.name}</td></tr>
+            {group.rows.map((row) => { const isSelected = selectedCategoryId === row.categoryId; const isEditing = editingCategoryId === row.categoryId; return <tr key={row.categoryId} data-testid={`budget-row-${row.categoryId}`} onClick={() => setSelectedCategoryId(row.categoryId)} className={cn('ez-row border-t border-white/5 cursor-pointer', isSelected && 'bg-muted/50')}><td className="px-3 py-1.5"><div className="flex items-center gap-1.5"><span className="font-semibold">{row.categoryName}</span>{row.available < 0 && <Badge variant="danger">Overspent</Badge>}</div></td><td className="px-3 py-1.5 text-right">{isEditing ? <div className="ml-auto flex max-w-[240px] items-center gap-2"><Input aria-label={`Assigned amount for ${row.categoryName}`} type="number" value={editingAmount} onChange={(e) => setEditingAmount(e.target.value)} /><Button size="sm" onClick={(e) => { e.stopPropagation(); saveAssignment(row.categoryId, Number(editingAmount)) }} disabled={!assignmentsEnabled}>Save</Button></div> : <button className="rounded px-2 py-1 font-bold text-primary transition hover:bg-primary/10 disabled:text-muted-foreground" disabled={!assignmentsEnabled} onClick={(e) => { e.stopPropagation(); setEditingCategoryId(row.categoryId); setEditingAmount(String(row.assigned)) }}>{currency(row.assigned)}</button>}</td><td className="px-3 py-1.5 text-right text-muted-foreground">{currency(row.activity)}</td><td className="px-3 py-1.5 text-right"><AvailabilityChip amount={row.available} /></td></tr> })}
           </Fragment>)}
           {!groupedRows.length && <tr><td colSpan={4} className="px-4 py-8 text-center text-muted-foreground">No categories yet. Add categories to start assigning money.</td></tr>}
-        </tbody></table></CardContent></Card>
+        </tbody></table></div>
 
-        <div className="space-y-2 md:hidden">
-          {groupedRows.map((group) => <section key={group.id} className="ez-panel rounded-2xl border border-white/10 p-2">
-            <p className="px-2 pb-1 text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">{group.name}</p>
-            {group.rows.map((row) => <button key={row.categoryId} onClick={() => setSelectedCategoryId(row.categoryId)} className="flex w-full items-center gap-3 border-t border-white/10 px-2 py-2 text-left first:border-t-0"><span className="text-base">{row.available < 0 ? '⚠️' : '💼'}</span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{row.categoryName}</span><span className="block text-[11px] text-muted-foreground">Assigned {currency(row.assigned)} • Activity {currency(row.activity)}</span></span><AvailabilityChip amount={row.available} /></button>)}
+        <div className="space-y-1.5 md:hidden">
+          {groupedRows.map((group) => <section key={group.id} className="border-b border-white/10 pb-1">
+            <p className="px-1 pb-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">{group.name}</p>
+            {group.rows.map((row) => <button key={row.categoryId} onClick={() => setSelectedCategoryId(row.categoryId)} className="flex w-full items-center gap-2 border-t border-white/10 px-1 py-1.5 text-left first:border-t-0"><span className="text-sm">{row.available < 0 ? '⚠️' : '💼'}</span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{row.categoryName}</span><span className="block text-[10px] text-muted-foreground">Assigned {currency(row.assigned)} • Activity {currency(row.activity)}</span></span><AvailabilityChip amount={row.available} /></button>)}
           </section>)}
         </div>
       </section>}
@@ -179,7 +179,7 @@ export function App() {
       {notice && <p className="mt-3 text-xs text-muted-foreground">{notice}</p>}
     </main>
 
-    <aside className="ez-panel hidden rounded-2xl border border-white/10 p-4 shadow-2xl md:block">
+    <aside className="hidden border-l border-white/10 pl-3 md:block">
       <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Inspector</p>
       <h3 className="mt-1 text-lg font-semibold">{selectedRow?.categoryName || 'Select a category'}</h3>
       <div className="mt-4 space-y-3 text-sm">
@@ -202,11 +202,11 @@ export function App() {
 }
 
 function AvailabilityChip({ amount }: { amount: number }) {
-  return <span className={cn('inline-flex min-w-[82px] justify-center rounded-full px-2.5 py-1 text-xs font-semibold', amount < 0 ? 'bg-rose-500/20 text-rose-200' : amount === 0 ? 'bg-slate-500/25 text-slate-300' : 'bg-emerald-500/20 text-emerald-200')}>{currency(amount)}</span>
+  return <span className={cn('inline-flex min-w-[74px] justify-center rounded-md px-2 py-0.5 text-[11px] font-semibold', amount < 0 ? 'bg-rose-500/20 text-rose-200' : amount === 0 ? 'bg-slate-500/25 text-slate-300' : 'bg-emerald-500/20 text-emerald-200')}>{currency(amount)}</span>
 }
 
 function SummaryRow({ label, value, highlighted }: { label: string; value: string; highlighted?: boolean }) {
-  return <div className="flex items-center justify-between rounded-xl border border-white/10 bg-muted/30 px-3 py-2"><span className="text-muted-foreground">{label}</span><span className={cn('font-semibold', highlighted && 'text-primary')}>{value}</span></div>
+  return <div className="flex items-center justify-between border-b border-white/10 py-1.5 text-sm"><span className="text-muted-foreground">{label}</span><span className={cn('font-semibold', highlighted && 'text-primary')}>{value}</span></div>
 }
 
 function CrudPanel({ title, items, onCreate, parentRequired }: { title: string; items: any[]; onCreate: (name: string) => Promise<void>; parentRequired?: boolean }) {
