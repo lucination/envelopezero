@@ -2,7 +2,6 @@ import { Fragment, useEffect, useMemo, useState, type FormEvent, type ReactNode 
 import { ArrowLeft, ArrowRight, CircleUserRound, Landmark, PiggyBank, Plus, ReceiptText, Settings, WalletCards } from 'lucide-react'
 import { Badge } from './components/ui/badge'
 import { Button } from './components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card'
 import { Input } from './components/ui/input'
 import { cn } from './lib/utils'
 
@@ -116,10 +115,10 @@ export function App() {
     }
   }
 
-  if (!session) return <main className="min-h-screen p-4 sm:grid sm:place-items-center"><Card className="mx-auto w-full max-w-md border-white/10"><CardHeader><CardTitle className="font-brand text-3xl">EnvelopeZero</CardTitle><p className="text-sm text-muted-foreground">Professional zero-based budgeting.</p></CardHeader><CardContent className="space-y-3"><form className="space-y-2" onSubmit={requestMagicLink}><Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" aria-label="Email" /><Button className="w-full">Send magic link</Button></form><form className="space-y-2" onSubmit={verifyToken}><Input value={tokenInput} onChange={(e) => setTokenInput(e.target.value)} placeholder="Paste token" aria-label="Token" /><Button variant="secondary" className="w-full">Verify token</Button></form><p className="text-xs text-muted-foreground">{notice || 'Sign in to continue'}</p></CardContent></Card><ToastViewport toasts={toasts} /></main>
+  if (!session) return <main className="min-h-screen p-4 sm:grid sm:place-items-center"><section className="mx-auto w-full max-w-md border border-white/10 bg-background/40 p-5 shadow-2xl backdrop-blur"><header className="mb-4 border-b border-white/10 pb-3"><h1 className="font-brand text-3xl">EnvelopeZero</h1><p className="text-sm text-muted-foreground">Professional zero-based budgeting.</p></header><div className="space-y-3"><form className="space-y-2" onSubmit={requestMagicLink}><Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" aria-label="Email" /><Button className="w-full">Send magic link</Button></form><form className="space-y-2" onSubmit={verifyToken}><Input value={tokenInput} onChange={(e) => setTokenInput(e.target.value)} placeholder="Paste token" aria-label="Token" /><Button variant="secondary" className="w-full">Verify token</Button></form><p className="text-xs text-muted-foreground">{notice || 'Sign in to continue'}</p></div></section><ToastViewport toasts={toasts} /></main>
 
-  return <div className="min-h-screen md:grid md:grid-cols-[188px_1fr_232px] md:gap-2 md:p-2">
-    <aside className="ez-panel hidden rounded-md border border-white/10 p-3 md:block">
+  return <div className="min-h-screen md:grid md:grid-cols-[188px_1fr_232px] md:gap-0 md:px-3">
+    <aside className="ez-panel hidden border-r border-white/10 p-4 md:block">
       <h2 className="font-brand text-[1.7rem] font-bold leading-none">EnvelopeZero</h2>
       <p className="mb-3 mt-0.5 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Budget Workspace</p>
       <nav className="space-y-0.5" aria-label="Primary">
@@ -127,8 +126,8 @@ export function App() {
       </nav>
     </aside>
 
-    <main className="p-2 pb-32 md:p-0 md:pb-0">
-      <header className="mb-2 hidden items-center justify-between border-b border-white/10 px-1 pb-2 pt-1 md:flex">
+    <main className="p-2 pb-32 md:px-4 md:pb-0">
+      <header className="mb-2 hidden items-center justify-between border-b border-white/10 px-1 pb-3 pt-4 md:flex">
         <div>
           <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">{activeBudget?.name || 'No budget'}</p>
           <h1 className="font-brand text-3xl">{tabs.find((t) => t.id === activeTab)?.label}</h1>
@@ -173,13 +172,13 @@ export function App() {
         </div>
       </section>}
 
-      {activeTab === 'transactions' && <Card className="border-white/10"><CardHeader><CardTitle>Transactions</CardTitle></CardHeader><CardContent><form className="grid gap-2 md:grid-cols-2" onSubmit={async (e) => { e.preventDefault(); if (!activeBudget || !accounts[0] || !categories[0] || !session) return setNotice('Need budget/account/category'); await api('/transactions', session.token, { method: 'POST', body: JSON.stringify({ budget_id: activeBudget.id, account_id: accounts[0].id, date: txDate, payee: txPayee || null, memo: txMemo || null, splits: [{ category_id: categories[0].id, inflow: Number(txInflow), outflow: Number(txOutflow), memo: null }] }) }); setNotice('Transaction created'); setTxPayee(''); setTxMemo(''); setTxInflow('0'); setTxOutflow('0'); await refresh(); await refreshMonthProjection() }}><Input aria-label="Transaction date" type="date" value={txDate} onChange={(e) => setTxDate(e.target.value)} /><Input aria-label="Payee" value={txPayee} onChange={(e) => setTxPayee(e.target.value)} placeholder="Payee" /><Input aria-label="Memo" value={txMemo} onChange={(e) => setTxMemo(e.target.value)} placeholder="Memo" /><Input aria-label="Inflow" type="number" value={txInflow} onChange={(e) => setTxInflow(e.target.value)} /><Input aria-label="Outflow" type="number" value={txOutflow} onChange={(e) => setTxOutflow(e.target.value)} /><Button className="md:col-span-2">Create transaction</Button></form>{!transactions.length ? <p className="mt-2 text-sm text-muted-foreground">No transactions yet</p> : <ul className="mt-4 divide-y divide-white/10 rounded-xl border border-white/10">{transactions.slice(0, 8).map((tx) => <li key={tx.id} className="flex items-center justify-between px-3 py-2 text-sm"><span className="truncate">🧾 {tx.payee || 'Transaction'}</span><span className="font-semibold text-warning">{currency(tx.splits.reduce((acc, s) => acc + s.outflow - s.inflow, 0))}</span></li>)}</ul>}</CardContent></Card>}
+      {activeTab === 'transactions' && <section className="space-y-4 border-t border-white/10 pt-3"><header><h2 className="font-brand text-2xl">Transactions</h2></header><form className="grid gap-2 md:grid-cols-2" onSubmit={async (e) => { e.preventDefault(); if (!activeBudget || !accounts[0] || !categories[0] || !session) return setNotice('Need budget/account/category'); await api('/transactions', session.token, { method: 'POST', body: JSON.stringify({ budget_id: activeBudget.id, account_id: accounts[0].id, date: txDate, payee: txPayee || null, memo: txMemo || null, splits: [{ category_id: categories[0].id, inflow: Number(txInflow), outflow: Number(txOutflow), memo: null }] }) }); setNotice('Transaction created'); setTxPayee(''); setTxMemo(''); setTxInflow('0'); setTxOutflow('0'); await refresh(); await refreshMonthProjection() }}><Input aria-label="Transaction date" type="date" value={txDate} onChange={(e) => setTxDate(e.target.value)} /><Input aria-label="Payee" value={txPayee} onChange={(e) => setTxPayee(e.target.value)} placeholder="Payee" /><Input aria-label="Memo" value={txMemo} onChange={(e) => setTxMemo(e.target.value)} placeholder="Memo" /><Input aria-label="Inflow" type="number" value={txInflow} onChange={(e) => setTxInflow(e.target.value)} /><Input aria-label="Outflow" type="number" value={txOutflow} onChange={(e) => setTxOutflow(e.target.value)} /><Button className="md:col-span-2">Create transaction</Button></form>{!transactions.length ? <p className="text-sm text-muted-foreground">No transactions yet</p> : <ul className="divide-y divide-white/10 border-y border-white/10">{transactions.slice(0, 8).map((tx) => <li key={tx.id} className="flex items-center justify-between px-1 py-2 text-sm"><span className="truncate">🧾 {tx.payee || 'Transaction'}</span><span className="font-semibold text-warning">{currency(tx.splits.reduce((acc, s) => acc + s.outflow - s.inflow, 0))}</span></li>)}</ul>}</section>}
       {activeTab === 'accounts' && <CrudPanel title="Accounts" items={accounts} parentRequired={!activeBudget} onCreate={async (name) => { if (!session || !activeBudget) return; await api('/accounts', session.token, { method: 'POST', body: JSON.stringify({ name, budget_id: activeBudget.id }) }); await refresh() }} />}
-      {activeTab === 'settings' && <Card className="border-white/10"><CardHeader><CardTitle>Settings</CardTitle></CardHeader><CardContent><p className="mb-3 text-sm text-muted-foreground">Manage authentication and session controls.</p><Button variant="secondary" onClick={() => { localStorage.removeItem('ez_session'); setSession(null) }}>Logout</Button></CardContent></Card>}
+      {activeTab === 'settings' && <section className="space-y-4 border-t border-white/10 pt-3"><header><h2 className="font-brand text-2xl">Settings</h2></header><p className="text-sm text-muted-foreground">Manage authentication and session controls.</p><Button variant="secondary" onClick={() => { localStorage.removeItem('ez_session'); setSession(null) }}>Logout</Button></section>}
       {notice && <p className="mt-3 text-xs text-muted-foreground">{notice}</p>}
     </main>
 
-    <aside className="hidden border-l border-white/10 pl-3 md:block">
+    <aside className="hidden border-l border-white/10 px-4 pt-4 md:block">
       <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Inspector</p>
       <h3 className="mt-1 text-lg font-semibold">{selectedRow?.categoryName || 'Select a category'}</h3>
       <div className="mt-4 space-y-3 text-sm">
@@ -211,7 +210,7 @@ function SummaryRow({ label, value, highlighted }: { label: string; value: strin
 
 function CrudPanel({ title, items, onCreate, parentRequired }: { title: string; items: any[]; onCreate: (name: string) => Promise<void>; parentRequired?: boolean }) {
   const [name, setName] = useState('')
-  return <Card className="border-white/10"><CardHeader><CardTitle>{title}</CardTitle></CardHeader><CardContent><form className="space-y-2" onSubmit={async (e) => { e.preventDefault(); if (!name.trim() || parentRequired) return; await onCreate(name); setName('') }}><Input aria-label={`New ${title}`} value={name} onChange={(e) => setName(e.target.value)} disabled={parentRequired} /><Button disabled={parentRequired}>Create</Button></form>{!items.length && <p className="mt-2 text-sm text-muted-foreground">No {title.toLowerCase()} yet</p>}<ul className="mt-3 list-disc pl-5 text-sm">{items.map((x) => <li key={x.id}>{x.name}</li>)}</ul></CardContent></Card>
+  return <section className="space-y-3 border-t border-white/10 pt-3"><header><h2 className="font-brand text-2xl">{title}</h2></header><form className="space-y-2" onSubmit={async (e) => { e.preventDefault(); if (!name.trim() || parentRequired) return; await onCreate(name); setName('') }}><Input aria-label={`New ${title}`} value={name} onChange={(e) => setName(e.target.value)} disabled={parentRequired} /><Button disabled={parentRequired}>Create</Button></form>{!items.length && <p className="text-sm text-muted-foreground">No {title.toLowerCase()} yet</p>}<ul className="list-disc border-t border-white/10 pl-5 pt-3 text-sm">{items.map((x) => <li key={x.id}>{x.name}</li>)}</ul></section>
 }
 
 function ToastViewport({ toasts }: { toasts: Toast[] }) {

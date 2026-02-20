@@ -23,8 +23,8 @@ body {
 }
 
 .ez-panel {
-  backdrop-filter: blur(8px);
-  background-color: hsl(224 24% 11% / 0.7);
+  backdrop-filter: blur(4px);
+  background-color: hsl(224 24% 11% / 0.35);
 }
 
 .ez-table thead {
