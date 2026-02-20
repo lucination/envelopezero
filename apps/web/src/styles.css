@@ -1,11 +1,72 @@
+@import url('https://fonts.googleapis.com/css2?family=Alegreya:wght@600;700;800&family=Alegreya+Sans:wght@400;500;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  font-family: 'Alegreya Sans', 'Inter', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, ui-sans-serif, system-ui, sans-serif;
 }
 
 body {
   @apply bg-background text-foreground antialiased;
+  background-image: radial-gradient(circle at 12% -2%, hsl(220 95% 65% / 0.11), transparent 28%), radial-gradient(circle at 89% 5%, hsl(248 71% 63% / 0.08), transparent 25%);
+  min-height: 100vh;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.font-brand {
+  font-family: 'Alegreya', 'Times New Roman', Georgia, Cambria, 'Liberation Serif', serif;
+}
+
+.ez-panel {
+  backdrop-filter: blur(14px);
+  background-color: hsl(224 28% 12% / 0.88);
+}
+
+.ez-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.ez-row {
+  transition: background-color 160ms ease;
+}
+
+.ez-row:hover {
+  background-color: hsl(224 21% 19%);
+}
+
+.ios-icon-btn {
+  @apply flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-white/5 text-muted-foreground;
+}
+
+.mobile-cta {
+  position: fixed;
+  left: 50%;
+  bottom: calc(5.6rem + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  @apply z-40 inline-flex items-center gap-1.5 rounded-full border border-sky-300/40 bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-glow;
+}
+
+.mobile-nav {
+  position: fixed;
+  left: 0.75rem;
+  right: 0.75rem;
+  bottom: max(0.75rem, env(safe-area-inset-bottom));
+  @apply z-30 grid grid-cols-5 rounded-[1.4rem] border border-white/15 bg-card/80 p-2 shadow-2xl;
+  backdrop-filter: blur(18px);
+}
+
+.mobile-nav-item {
+  @apply flex flex-col items-center justify-center gap-1 rounded-xl py-1 text-[10px] font-semibold text-muted-foreground transition;
+}
+
+.mobile-nav-item-active {
+  @apply bg-primary/25 text-primary;
+  box-shadow: inset 0 0 0 1px hsl(207 92% 67% / 0.4), 0 0 12px hsl(207 92% 67% / 0.35);
 }

@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
-import { ArrowLeft, ArrowRight, Landmark, PiggyBank, ReceiptText, Settings } from 'lucide-react'
+import { ArrowLeft, ArrowRight, CircleUserRound, Landmark, PiggyBank, Plus, ReceiptText, Settings, WalletCards } from 'lucide-react'
 import { Badge } from './components/ui/badge'
 import { Button } from './components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card'
@@ -26,6 +26,14 @@ const tabs: { id: AppTab; label: string; icon: ReactNode }[] = [
   { id: 'transactions', label: 'Transactions', icon: <ReceiptText className="h-4 w-4" /> },
   { id: 'accounts', label: 'Accounts', icon: <Landmark className="h-4 w-4" /> },
   { id: 'settings', label: 'Settings', icon: <Settings className="h-4 w-4" /> },
+]
+
+const mobileNav = [
+  { id: 'budget' as AppTab, label: 'Budget', icon: PiggyBank },
+  { id: 'transactions' as AppTab, label: 'Moves', icon: WalletCards },
+  { id: 'accounts' as AppTab, label: 'Accounts', icon: Landmark },
+  { id: 'settings' as AppTab, label: 'Settings', icon: Settings },
+  { id: 'settings' as AppTab, label: 'Profile', icon: CircleUserRound },
 ]
 
 async function api<T>(path: string, token: string, init?: RequestInit): Promise<T> {
@@ -92,6 +100,8 @@ export function App() {
   }, [activeBudget, categories, projections, supercategories])
   const groupedRows = useMemo(() => { const grouped = new Map<string, { name: string; rows: BudgetRow[] }>(); budgetRows.forEach((row) => { if (!grouped.has(row.supercategoryId)) grouped.set(row.supercategoryId, { name: row.supercategoryName, rows: [] }); grouped.get(row.supercategoryId)?.rows.push(row) }); return [...grouped.entries()].map(([id, group]) => ({ id, ...group })) }, [budgetRows])
   const readyToAssign = useMemo(() => dashboard.available - budgetRows.reduce((sum, row) => sum + row.assigned, 0), [dashboard.available, budgetRows])
+  const overspentRows = useMemo(() => budgetRows.filter((row) => row.available < 0), [budgetRows])
+  const selectedRow = useMemo(() => budgetRows.find((r) => r.categoryId === selectedCategoryId) || budgetRows[0], [selectedCategoryId, budgetRows])
 
   async function saveAssignment(categoryId: string, nextAssignedAbsolute: number) {
     if (!session || !activeBudget) return
@@ -106,44 +116,104 @@ export function App() {
     }
   }
 
-  if (!session) return <main className="min-h-screen bg-muted/30 p-4 sm:grid sm:place-items-center"><Card className="mx-auto w-full max-w-md"><CardHeader><CardTitle>EnvelopeZero</CardTitle><p className="text-sm text-muted-foreground">Professional zero-based budgeting.</p></CardHeader><CardContent className="space-y-3"><form className="space-y-2" onSubmit={requestMagicLink}><Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" aria-label="Email" /><Button className="w-full">Send magic link</Button></form><form className="space-y-2" onSubmit={verifyToken}><Input value={tokenInput} onChange={(e) => setTokenInput(e.target.value)} placeholder="Paste token" aria-label="Token" /><Button variant="secondary" className="w-full">Verify token</Button></form><p className="text-xs text-muted-foreground">{notice || 'Sign in to continue'}</p></CardContent></Card><ToastViewport toasts={toasts} /></main>
+  if (!session) return <main className="min-h-screen p-4 sm:grid sm:place-items-center"><Card className="mx-auto w-full max-w-md border-white/10"><CardHeader><CardTitle className="font-brand text-3xl">EnvelopeZero</CardTitle><p className="text-sm text-muted-foreground">Professional zero-based budgeting.</p></CardHeader><CardContent className="space-y-3"><form className="space-y-2" onSubmit={requestMagicLink}><Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" aria-label="Email" /><Button className="w-full">Send magic link</Button></form><form className="space-y-2" onSubmit={verifyToken}><Input value={tokenInput} onChange={(e) => setTokenInput(e.target.value)} placeholder="Paste token" aria-label="Token" /><Button variant="secondary" className="w-full">Verify token</Button></form><p className="text-xs text-muted-foreground">{notice || 'Sign in to continue'}</p></CardContent></Card><ToastViewport toasts={toasts} /></main>
 
-  return <div className="min-h-screen bg-muted/30 md:grid md:grid-cols-[250px_1fr] md:gap-4 md:p-4">
-    <aside className="hidden rounded-lg border bg-card p-4 shadow-sm md:block">
-      <h2 className="mb-4 text-lg font-semibold">EnvelopeZero</h2>
+  return <div className="min-h-screen md:grid md:grid-cols-[220px_1fr_280px] md:gap-3 md:p-3">
+    <aside className="ez-panel hidden rounded-2xl border border-white/10 p-4 shadow-2xl md:block">
+      <h2 className="font-brand text-3xl font-bold">EnvelopeZero</h2>
+      <p className="mb-4 mt-1 text-xs uppercase tracking-[0.2em] text-muted-foreground">Budget Workspace</p>
       <nav className="space-y-1" aria-label="Primary">
-        {tabs.map((tab) => <Button key={tab.id} variant={activeTab === tab.id ? 'default' : 'ghost'} className="w-full justify-start" onClick={() => setActiveTab(tab.id)}>{tab.icon}{tab.label}</Button>)}
+        {tabs.map((tab) => <Button key={tab.id} variant={activeTab === tab.id ? 'default' : 'ghost'} className={cn('w-full justify-start', activeTab === tab.id && 'shadow-glow')} onClick={() => setActiveTab(tab.id)}>{tab.icon}{tab.label}</Button>)}
       </nav>
     </aside>
-    <div className="p-4 md:p-0">
-      <header className="mb-4 rounded-lg border bg-card p-4 shadow-sm"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs uppercase tracking-wide text-muted-foreground">{activeBudget?.name || 'No budget'}</p><h1 className="text-2xl font-semibold">{tabs.find((t) => t.id === activeTab)?.label}</h1></div><div className="flex items-center gap-2 text-sm text-muted-foreground"><span>{loading ? 'Refreshing…' : `Month ${month}`}</span><Button size="sm" onClick={() => setActiveTab('transactions')}>Add transaction</Button></div></div></header>
-      {activeTab === 'budget' && <section className="space-y-4">
-        <Card data-testid="dashboard-totals"><CardContent className="grid gap-4 p-4 md:grid-cols-[1fr_auto]"><div><p className="text-xs uppercase tracking-wide text-muted-foreground">Ready to Assign</p><p data-testid="ready-to-assign" className={cn('text-3xl font-bold', readyToAssign < 0 ? 'text-danger' : 'text-success')}>{currency(readyToAssign)}</p></div><div className="flex items-center gap-2"><Button variant="outline" size="sm" onClick={() => setMonth((m) => monthShift(m, -1))}><ArrowLeft className="h-4 w-4" />Previous</Button><span className="w-20 text-center text-sm font-medium">{month}</span><Button variant="outline" size="sm" onClick={() => setMonth((m) => monthShift(m, 1))}>Next<ArrowRight className="h-4 w-4" /></Button></div>{!assignmentsEnabled && <p className="text-xs text-muted-foreground md:col-span-2">Assignments are view-only because assignment API is disabled.</p>}</CardContent></Card>
-        <Card><CardContent className="overflow-x-auto p-0" data-testid="budget-workspace"><table className="min-w-full text-sm"><thead className="bg-muted/40 text-muted-foreground"><tr><th className="px-4 py-3 text-left font-medium">Category</th><th className="px-4 py-3 text-right font-medium">Assigned</th><th className="px-4 py-3 text-right font-medium">Activity</th><th className="px-4 py-3 text-right font-medium">Available</th></tr></thead><tbody>
+
+    <main className="p-3 pb-36 md:p-0 md:pb-0">
+      <header className="ez-panel mb-3 hidden items-center justify-between rounded-2xl border border-white/10 px-4 py-3 shadow-2xl md:flex">
+        <div>
+          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">{activeBudget?.name || 'No budget'}</p>
+          <h1 className="font-brand text-3xl">{tabs.find((t) => t.id === activeTab)?.label}</h1>
+        </div>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Badge variant="outline">{loading ? 'Refreshing…' : 'Synced'}</Badge>
+          <Badge variant="outline">Month {month}</Badge>
+          <Button size="sm" onClick={() => setActiveTab('transactions')}>+ Transaction</Button>
+        </div>
+      </header>
+
+      <header className="mb-3 md:hidden">
+        <div className="ez-panel flex items-center justify-between rounded-2xl border border-white/10 px-3 py-2">
+          <button className="ios-icon-btn" onClick={() => setMonth((m) => monthShift(m, -1))} aria-label="Previous month"><ArrowLeft className="h-4 w-4" /></button>
+          <p className="text-sm font-semibold tracking-wide">{month}</p>
+          <button className="ios-icon-btn" onClick={() => setMonth((m) => monthShift(m, 1))} aria-label="Next month"><ArrowRight className="h-4 w-4" /></button>
+        </div>
+      </header>
+
+      {activeTab === 'budget' && <section className="space-y-3" data-testid="budget-workspace">
+        <Card data-testid="dashboard-totals" className="border-white/10"><CardContent className="grid gap-3 p-4 md:grid-cols-[1fr_auto]">
+          <div><p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Ready to Assign</p><p data-testid="ready-to-assign" className={cn('text-3xl font-extrabold', readyToAssign < 0 ? 'text-danger' : 'text-success')}>{currency(readyToAssign)}</p></div>
+          <div className="hidden items-center gap-2 md:flex"><Button variant="outline" size="sm" onClick={() => setMonth((m) => monthShift(m, -1))}><ArrowLeft className="h-4 w-4" />Previous</Button><span className="w-20 text-center text-sm font-bold">{month}</span><Button variant="outline" size="sm" onClick={() => setMonth((m) => monthShift(m, 1))}>Next<ArrowRight className="h-4 w-4" /></Button></div>
+          <div className="flex gap-2 md:col-span-2"><Badge variant="outline">{budgetRows.length} categories</Badge><Badge variant="outline">{overspentRows.length} overspent</Badge></div>
+        </CardContent></Card>
+
+        {overspentRows.length > 0 && <Card className="border-rose-400/30 bg-rose-500/10"><CardContent className="flex items-center justify-between p-3"><div><p className="text-xs uppercase tracking-[0.18em] text-rose-300">Overspent</p><p className="text-sm text-rose-100">{overspentRows[0].categoryName} needs coverage.</p></div><button className="rounded-full border border-rose-300/50 bg-rose-500/20 px-3 py-1 text-xs font-semibold text-rose-100">Cover</button></CardContent></Card>}
+
+        <Card className="hidden border-white/10 md:block"><CardContent className="overflow-x-auto p-0"><table className="ez-table min-w-full text-sm"><thead className="bg-muted/70 text-muted-foreground"><tr><th className="px-4 py-2 text-left text-[11px] font-bold uppercase tracking-[0.16em]">Category</th><th className="px-4 py-2 text-right text-[11px] font-bold uppercase tracking-[0.16em]">Assigned</th><th className="px-4 py-2 text-right text-[11px] font-bold uppercase tracking-[0.16em]">Activity</th><th className="px-4 py-2 text-right text-[11px] font-bold uppercase tracking-[0.16em]">Available</th></tr></thead><tbody>
           {groupedRows.map((group) => <Fragment key={group.id}>
-            <tr key={`${group.id}-h`} className="bg-muted/20"><td colSpan={4} className="px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{group.name}</td></tr>
-            {group.rows.map((row) => { const isSelected = selectedCategoryId === row.categoryId; const isEditing = editingCategoryId === row.categoryId; return <tr key={row.categoryId} data-testid={`budget-row-${row.categoryId}`} onClick={() => setSelectedCategoryId(row.categoryId)} className={cn('border-t cursor-pointer', isSelected && 'bg-muted/30')}><td className="px-4 py-3"><div className="flex items-center gap-2"><span className="font-medium">{row.categoryName}</span>{row.available < 0 && <Badge variant="danger">Overspent</Badge>}</div>{isSelected && row.available < 0 && <p className="mt-1 text-xs text-muted-foreground">Cover overspending by moving money from another category.</p>}</td><td className="px-4 py-3 text-right">{isEditing ? <div className="ml-auto flex max-w-[220px] items-center gap-2"><Input aria-label={`Assigned amount for ${row.categoryName}`} type="number" value={editingAmount} onChange={(e) => setEditingAmount(e.target.value)} /><Button size="sm" onClick={(e) => { e.stopPropagation(); saveAssignment(row.categoryId, Number(editingAmount)) }} disabled={!assignmentsEnabled}>Save</Button></div> : <button className="font-semibold text-primary" disabled={!assignmentsEnabled} onClick={(e) => { e.stopPropagation(); setEditingCategoryId(row.categoryId); setEditingAmount(String(row.assigned)) }}>{currency(row.assigned)}</button>}</td><td className="px-4 py-3 text-right">{currency(row.activity)}</td><td className={cn('px-4 py-3 text-right font-semibold', row.available < 0 ? 'text-danger' : row.available < 1000 ? 'text-warning' : 'text-success')}>{currency(row.available)}</td></tr> })}
+            <tr className="bg-muted/30"><td colSpan={4} className="px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.2em] text-muted-foreground">{group.name}</td></tr>
+            {group.rows.map((row) => { const isSelected = selectedCategoryId === row.categoryId; const isEditing = editingCategoryId === row.categoryId; return <tr key={row.categoryId} data-testid={`budget-row-${row.categoryId}`} onClick={() => setSelectedCategoryId(row.categoryId)} className={cn('ez-row border-t border-white/5 cursor-pointer', isSelected && 'bg-muted/70')}><td className="px-4 py-2"><div className="flex items-center gap-2"><span className="font-semibold">{row.categoryName}</span>{row.available < 0 && <Badge variant="danger">Overspent</Badge>}</div></td><td className="px-4 py-2 text-right">{isEditing ? <div className="ml-auto flex max-w-[240px] items-center gap-2"><Input aria-label={`Assigned amount for ${row.categoryName}`} type="number" value={editingAmount} onChange={(e) => setEditingAmount(e.target.value)} /><Button size="sm" onClick={(e) => { e.stopPropagation(); saveAssignment(row.categoryId, Number(editingAmount)) }} disabled={!assignmentsEnabled}>Save</Button></div> : <button className="rounded px-2 py-1 font-bold text-primary transition hover:bg-primary/10 disabled:text-muted-foreground" disabled={!assignmentsEnabled} onClick={(e) => { e.stopPropagation(); setEditingCategoryId(row.categoryId); setEditingAmount(String(row.assigned)) }}>{currency(row.assigned)}</button>}</td><td className="px-4 py-2 text-right text-muted-foreground">{currency(row.activity)}</td><td className="px-4 py-2 text-right"><AvailabilityChip amount={row.available} /></td></tr> })}
           </Fragment>)}
           {!groupedRows.length && <tr><td colSpan={4} className="px-4 py-8 text-center text-muted-foreground">No categories yet. Add categories to start assigning money.</td></tr>}
         </tbody></table></CardContent></Card>
+
+        <div className="space-y-2 md:hidden">
+          {groupedRows.map((group) => <section key={group.id} className="ez-panel rounded-2xl border border-white/10 p-2">
+            <p className="px-2 pb-1 text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">{group.name}</p>
+            {group.rows.map((row) => <button key={row.categoryId} onClick={() => setSelectedCategoryId(row.categoryId)} className="flex w-full items-center gap-3 border-t border-white/10 px-2 py-2 text-left first:border-t-0"><span className="text-base">{row.available < 0 ? '⚠️' : '💼'}</span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{row.categoryName}</span><span className="block text-[11px] text-muted-foreground">Assigned {currency(row.assigned)} • Activity {currency(row.activity)}</span></span><AvailabilityChip amount={row.available} /></button>)}
+          </section>)}
+        </div>
       </section>}
-      {activeTab === 'transactions' && <Card><CardHeader><CardTitle>Transactions</CardTitle></CardHeader><CardContent><form className="grid gap-2 md:grid-cols-2" onSubmit={async (e) => { e.preventDefault(); if (!activeBudget || !accounts[0] || !categories[0] || !session) return setNotice('Need budget/account/category'); await api('/transactions', session.token, { method: 'POST', body: JSON.stringify({ budget_id: activeBudget.id, account_id: accounts[0].id, date: txDate, payee: txPayee || null, memo: txMemo || null, splits: [{ category_id: categories[0].id, inflow: Number(txInflow), outflow: Number(txOutflow), memo: null }] }) }); setNotice('Transaction created'); setTxPayee(''); setTxMemo(''); setTxInflow('0'); setTxOutflow('0'); await refresh(); await refreshMonthProjection() }}><Input aria-label="Transaction date" type="date" value={txDate} onChange={(e) => setTxDate(e.target.value)} /><Input aria-label="Payee" value={txPayee} onChange={(e) => setTxPayee(e.target.value)} placeholder="Payee" /><Input aria-label="Memo" value={txMemo} onChange={(e) => setTxMemo(e.target.value)} placeholder="Memo" /><Input aria-label="Inflow" type="number" value={txInflow} onChange={(e) => setTxInflow(e.target.value)} /><Input aria-label="Outflow" type="number" value={txOutflow} onChange={(e) => setTxOutflow(e.target.value)} /><Button className="md:col-span-2">Create transaction</Button></form>{!transactions.length && <p className="mt-2 text-sm text-muted-foreground">No transactions yet</p>}</CardContent></Card>}
+
+      {activeTab === 'transactions' && <Card className="border-white/10"><CardHeader><CardTitle>Transactions</CardTitle></CardHeader><CardContent><form className="grid gap-2 md:grid-cols-2" onSubmit={async (e) => { e.preventDefault(); if (!activeBudget || !accounts[0] || !categories[0] || !session) return setNotice('Need budget/account/category'); await api('/transactions', session.token, { method: 'POST', body: JSON.stringify({ budget_id: activeBudget.id, account_id: accounts[0].id, date: txDate, payee: txPayee || null, memo: txMemo || null, splits: [{ category_id: categories[0].id, inflow: Number(txInflow), outflow: Number(txOutflow), memo: null }] }) }); setNotice('Transaction created'); setTxPayee(''); setTxMemo(''); setTxInflow('0'); setTxOutflow('0'); await refresh(); await refreshMonthProjection() }}><Input aria-label="Transaction date" type="date" value={txDate} onChange={(e) => setTxDate(e.target.value)} /><Input aria-label="Payee" value={txPayee} onChange={(e) => setTxPayee(e.target.value)} placeholder="Payee" /><Input aria-label="Memo" value={txMemo} onChange={(e) => setTxMemo(e.target.value)} placeholder="Memo" /><Input aria-label="Inflow" type="number" value={txInflow} onChange={(e) => setTxInflow(e.target.value)} /><Input aria-label="Outflow" type="number" value={txOutflow} onChange={(e) => setTxOutflow(e.target.value)} /><Button className="md:col-span-2">Create transaction</Button></form>{!transactions.length ? <p className="mt-2 text-sm text-muted-foreground">No transactions yet</p> : <ul className="mt-4 divide-y divide-white/10 rounded-xl border border-white/10">{transactions.slice(0, 8).map((tx) => <li key={tx.id} className="flex items-center justify-between px-3 py-2 text-sm"><span className="truncate">🧾 {tx.payee || 'Transaction'}</span><span className="font-semibold text-warning">{currency(tx.splits.reduce((acc, s) => acc + s.outflow - s.inflow, 0))}</span></li>)}</ul>}</CardContent></Card>}
       {activeTab === 'accounts' && <CrudPanel title="Accounts" items={accounts} parentRequired={!activeBudget} onCreate={async (name) => { if (!session || !activeBudget) return; await api('/accounts', session.token, { method: 'POST', body: JSON.stringify({ name, budget_id: activeBudget.id }) }); await refresh() }} />}
-      {activeTab === 'settings' && <Card><CardHeader><CardTitle>Settings</CardTitle></CardHeader><CardContent><p className="mb-3 text-sm text-muted-foreground">Manage authentication and session controls.</p><Button variant="secondary" onClick={() => { localStorage.removeItem('ez_session'); setSession(null) }}>Logout</Button></CardContent></Card>}
+      {activeTab === 'settings' && <Card className="border-white/10"><CardHeader><CardTitle>Settings</CardTitle></CardHeader><CardContent><p className="mb-3 text-sm text-muted-foreground">Manage authentication and session controls.</p><Button variant="secondary" onClick={() => { localStorage.removeItem('ez_session'); setSession(null) }}>Logout</Button></CardContent></Card>}
       {notice && <p className="mt-3 text-xs text-muted-foreground">{notice}</p>}
-    </div>
-    <nav className="fixed inset-x-0 bottom-0 grid grid-cols-4 border-t bg-card p-2 md:hidden" aria-label="Mobile primary">
-      {tabs.map((tab) => <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={cn('rounded-md px-2 py-2 text-xs font-medium text-muted-foreground', activeTab === tab.id && 'bg-muted text-foreground')}>{tab.label}</button>)}
+    </main>
+
+    <aside className="ez-panel hidden rounded-2xl border border-white/10 p-4 shadow-2xl md:block">
+      <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Inspector</p>
+      <h3 className="mt-1 text-lg font-semibold">{selectedRow?.categoryName || 'Select a category'}</h3>
+      <div className="mt-4 space-y-3 text-sm">
+        <SummaryRow label="Assigned" value={currency(selectedRow?.assigned || 0)} />
+        <SummaryRow label="Activity" value={currency(selectedRow?.activity || 0)} />
+        <SummaryRow label="Available" value={currency(selectedRow?.available || 0)} highlighted />
+      </div>
+      <div className="mt-6 space-y-2">
+        <Badge variant="outline">Inflow {currency(dashboard.inflow)}</Badge>
+        <Badge variant="outline">Outflow {currency(dashboard.outflow)}</Badge>
+      </div>
+    </aside>
+
+    <button className="mobile-cta md:hidden" onClick={() => setActiveTab('transactions')}><Plus className="h-4 w-4" /> Transaction</button>
+    <nav className="mobile-nav md:hidden" aria-label="Mobile primary">
+      {mobileNav.map((item, idx) => { const Icon = item.icon; const active = activeTab === item.id && idx !== 4; return <button key={`${item.label}-${idx}`} onClick={() => setActiveTab(item.id)} className={cn('mobile-nav-item', active && 'mobile-nav-item-active')}><Icon className="h-[18px] w-[18px]" /><span>{item.label}</span></button> })}
     </nav>
     <ToastViewport toasts={toasts} />
   </div>
 }
 
+function AvailabilityChip({ amount }: { amount: number }) {
+  return <span className={cn('inline-flex min-w-[82px] justify-center rounded-full px-2.5 py-1 text-xs font-semibold', amount < 0 ? 'bg-rose-500/20 text-rose-200' : amount === 0 ? 'bg-slate-500/25 text-slate-300' : 'bg-emerald-500/20 text-emerald-200')}>{currency(amount)}</span>
+}
+
+function SummaryRow({ label, value, highlighted }: { label: string; value: string; highlighted?: boolean }) {
+  return <div className="flex items-center justify-between rounded-xl border border-white/10 bg-muted/30 px-3 py-2"><span className="text-muted-foreground">{label}</span><span className={cn('font-semibold', highlighted && 'text-primary')}>{value}</span></div>
+}
+
 function CrudPanel({ title, items, onCreate, parentRequired }: { title: string; items: any[]; onCreate: (name: string) => Promise<void>; parentRequired?: boolean }) {
   const [name, setName] = useState('')
-  return <Card><CardHeader><CardTitle>{title}</CardTitle></CardHeader><CardContent><form className="space-y-2" onSubmit={async (e) => { e.preventDefault(); if (!name.trim() || parentRequired) return; await onCreate(name); setName('') }}><Input aria-label={`New ${title}`} value={name} onChange={(e) => setName(e.target.value)} disabled={parentRequired} /><Button disabled={parentRequired}>Create</Button></form>{!items.length && <p className="mt-2 text-sm text-muted-foreground">No {title.toLowerCase()} yet</p>}<ul className="mt-3 list-disc pl-5 text-sm">{items.map((x) => <li key={x.id}>{x.name}</li>)}</ul></CardContent></Card>
+  return <Card className="border-white/10"><CardHeader><CardTitle>{title}</CardTitle></CardHeader><CardContent><form className="space-y-2" onSubmit={async (e) => { e.preventDefault(); if (!name.trim() || parentRequired) return; await onCreate(name); setName('') }}><Input aria-label={`New ${title}`} value={name} onChange={(e) => setName(e.target.value)} disabled={parentRequired} /><Button disabled={parentRequired}>Create</Button></form>{!items.length && <p className="mt-2 text-sm text-muted-foreground">No {title.toLowerCase()} yet</p>}<ul className="mt-3 list-disc pl-5 text-sm">{items.map((x) => <li key={x.id}>{x.name}</li>)}</ul></CardContent></Card>
 }
 
 function ToastViewport({ toasts }: { toasts: Toast[] }) {
-  return <div className="fixed right-4 top-4 z-50 grid gap-2" aria-live="polite">{toasts.map((toast) => <div className={cn('rounded-md px-3 py-2 text-sm text-white shadow', toast.tone === 'error' && 'bg-rose-600', toast.tone === 'success' && 'bg-emerald-600', toast.tone === 'info' && 'bg-slate-700')} key={toast.id}>{toast.message}</div>)}</div>
+  return <div className="fixed right-4 top-4 z-50 grid gap-2" aria-live="polite">{toasts.map((toast) => <div className={cn('rounded-md border border-white/10 px-3 py-2 text-sm text-white shadow-2xl backdrop-blur', toast.tone === 'error' && 'bg-rose-600/90', toast.tone === 'success' && 'bg-emerald-600/90', toast.tone === 'info' && 'bg-slate-700/90')} key={toast.id}>{toast.message}</div>)}</div>
 }

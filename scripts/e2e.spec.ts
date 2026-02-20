@@ -22,11 +22,12 @@ test('core flow with projection and coherent UI', async ({ page }) => {
   await page.screenshot({ path: 'docs/assets/ui-shell-desktop.png', fullPage: true })
   await page.screenshot({ path: 'docs/assets/ui-budget-workspace.png', fullPage: true })
 
-  await page.getByRole('button', { name: 'Add transaction' }).click()
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.screenshot({ path: 'docs/assets/ui-shell-mobile.png', fullPage: true })
+
+  await page.getByRole('button', { name: 'Moves' }).click()
   await page.getByLabel('Payee').fill('Market')
   await page.getByLabel('Outflow').fill('2500')
   await page.getByRole('button', { name: 'Create transaction' }).click()
-
-  await page.setViewportSize({ width: 390, height: 844 })
-  await page.screenshot({ path: 'docs/assets/ui-shell-mobile.png', fullPage: true })
+  await page.screenshot({ path: 'docs/assets/ui-mobile-transactions-list.png', fullPage: true })
 })
