@@ -115,19 +115,19 @@ export function App() {
     }
   }
 
-  if (!session) return <main className="min-h-screen p-4 sm:grid sm:place-items-center"><section className="mx-auto w-full max-w-md border border-white/10 bg-background/40 p-5 shadow-2xl backdrop-blur"><header className="mb-4 border-b border-white/10 pb-3"><h1 className="font-brand text-3xl">EnvelopeZero</h1><p className="text-sm text-muted-foreground">Professional zero-based budgeting.</p></header><div className="space-y-3"><form className="space-y-2" onSubmit={requestMagicLink}><Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" aria-label="Email" /><Button className="w-full">Send magic link</Button></form><form className="space-y-2" onSubmit={verifyToken}><Input value={tokenInput} onChange={(e) => setTokenInput(e.target.value)} placeholder="Paste token" aria-label="Token" /><Button variant="secondary" className="w-full">Verify token</Button></form><p className="text-xs text-muted-foreground">{notice || 'Sign in to continue'}</p></div></section><ToastViewport toasts={toasts} /></main>
+  if (!session) return <main className="min-h-screen p-4 sm:grid sm:place-items-center"><section className="mx-auto w-full max-w-md p-5"><header className="mb-4 border-b border-white/10 pb-3"><h1 className="font-brand text-3xl">EnvelopeZero</h1><p className="text-sm text-muted-foreground">Professional zero-based budgeting.</p></header><div className="space-y-3"><form className="space-y-2" onSubmit={requestMagicLink}><Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" aria-label="Email" /><Button className="w-full">Send magic link</Button></form><form className="space-y-2" onSubmit={verifyToken}><Input value={tokenInput} onChange={(e) => setTokenInput(e.target.value)} placeholder="Paste token" aria-label="Token" /><Button variant="secondary" className="w-full">Verify token</Button></form><p className="text-xs text-muted-foreground">{notice || 'Sign in to continue'}</p></div></section><ToastViewport toasts={toasts} /></main>
 
-  return <div className="min-h-screen md:grid md:grid-cols-[188px_1fr_232px] md:gap-0 md:px-3">
-    <aside className="ez-panel hidden border-r border-white/10 p-4 md:block">
+  return <div className="min-h-screen md:grid md:grid-cols-[188px_1fr_232px] md:gap-0">
+    <aside className="workspace-pane ez-panel hidden border-r border-white/10 p-4 md:block">
       <h2 className="font-brand text-[1.7rem] font-bold leading-none">EnvelopeZero</h2>
       <p className="mb-3 mt-0.5 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Budget Workspace</p>
       <nav className="space-y-0.5" aria-label="Primary">
-        {tabs.map((tab) => <Button key={tab.id} variant={activeTab === tab.id ? 'default' : 'ghost'} className={cn('w-full justify-start', activeTab === tab.id && 'shadow-glow')} onClick={() => setActiveTab(tab.id)}>{tab.icon}{tab.label}</Button>)}
+        {tabs.map((tab) => <Button key={tab.id} variant={activeTab === tab.id ? 'default' : 'ghost'} className="w-full justify-start" onClick={() => setActiveTab(tab.id)}>{tab.icon}{tab.label}</Button>)}
       </nav>
     </aside>
 
-    <main className="p-2 pb-32 md:px-4 md:pb-0">
-      <header className="mb-2 hidden items-center justify-between border-b border-white/10 px-1 pb-3 pt-4 md:flex">
+    <main className="workspace-pane p-2 pb-32 md:px-4 md:pb-0">
+      <header className="workspace-strip mb-2 hidden items-center justify-between border-b border-white/10 px-1 pb-3 pt-4 md:flex">
         <div>
           <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">{activeBudget?.name || 'No budget'}</p>
           <h1 className="font-brand text-3xl">{tabs.find((t) => t.id === activeTab)?.label}</h1>
@@ -139,7 +139,7 @@ export function App() {
         </div>
       </header>
 
-      <header className="mb-2 md:hidden">
+      <header className="workspace-strip mb-2 md:hidden">
         <div className="flex items-center justify-between border-b border-white/10 px-1 pb-2">
           <button className="ios-icon-btn" onClick={() => setMonth((m) => monthShift(m, -1))} aria-label="Previous month"><ArrowLeft className="h-4 w-4" /></button>
           <p className="text-sm font-semibold tracking-wide">{month}</p>
@@ -147,19 +147,19 @@ export function App() {
         </div>
       </header>
 
-      {activeTab === 'budget' && <section className="space-y-2" data-testid="budget-workspace">
+      {activeTab === 'budget' && <section className="workspace-strip space-y-2" data-testid="budget-workspace">
         <div data-testid="dashboard-totals" className="grid gap-2 border-b border-white/10 pb-2 md:grid-cols-[1fr_auto]">
           <div><p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Ready to Assign</p><p data-testid="ready-to-assign" className={cn('text-3xl font-extrabold', readyToAssign < 0 ? 'text-danger' : 'text-success')}>{currency(readyToAssign)}</p></div>
           <div className="hidden items-center gap-2 md:flex"><Button variant="outline" size="sm" onClick={() => setMonth((m) => monthShift(m, -1))}><ArrowLeft className="h-4 w-4" />Previous</Button><span className="w-20 text-center text-sm font-bold">{month}</span><Button variant="outline" size="sm" onClick={() => setMonth((m) => monthShift(m, 1))}>Next<ArrowRight className="h-4 w-4" /></Button></div>
           <div className="flex gap-2 md:col-span-2"><Badge variant="outline">{budgetRows.length} categories</Badge><Badge variant="outline">{overspentRows.length} overspent</Badge></div>
         </div>
 
-        {overspentRows.length > 0 && <div className="flex items-center justify-between border-l-2 border-rose-400/60 bg-rose-500/10 px-2 py-1.5"><div><p className="text-[10px] uppercase tracking-[0.14em] text-rose-300">Overspent</p><p className="text-xs text-rose-100">{overspentRows[0].categoryName} needs coverage.</p></div><button className="rounded-md bg-rose-500/25 px-2 py-0.5 text-[11px] font-semibold text-rose-100">Cover</button></div>}
+        {overspentRows.length > 0 && <div className="flex items-center justify-between border-l-2 border-rose-400/60 bg-rose-500/10 px-2 py-1.5"><div><p className="text-[10px] uppercase tracking-[0.14em] text-rose-300">Overspent</p><p className="text-xs text-rose-100">{overspentRows[0].categoryName} needs coverage.</p></div><button className="bg-rose-500/25 px-2 py-0.5 text-[11px] font-semibold text-rose-100">Cover</button></div>}
 
         <div className="hidden overflow-x-auto md:block"><table className="ez-table min-w-full text-[13px]"><thead className="border-b border-white/10 text-muted-foreground"><tr><th className="px-3 py-1.5 text-left text-[10px] font-bold uppercase tracking-[0.14em]">Category</th><th className="px-3 py-1.5 text-right text-[10px] font-bold uppercase tracking-[0.14em]">Assigned</th><th className="px-3 py-1.5 text-right text-[10px] font-bold uppercase tracking-[0.14em]">Activity</th><th className="px-3 py-1.5 text-right text-[10px] font-bold uppercase tracking-[0.14em]">Available</th></tr></thead><tbody>
           {groupedRows.map((group) => <Fragment key={group.id}>
             <tr><td colSpan={4} className="px-3 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">{group.name}</td></tr>
-            {group.rows.map((row) => { const isSelected = selectedCategoryId === row.categoryId; const isEditing = editingCategoryId === row.categoryId; return <tr key={row.categoryId} data-testid={`budget-row-${row.categoryId}`} onClick={() => setSelectedCategoryId(row.categoryId)} className={cn('ez-row border-t border-white/5 cursor-pointer', isSelected && 'bg-muted/50')}><td className="px-3 py-1.5"><div className="flex items-center gap-1.5"><span className="font-semibold">{row.categoryName}</span>{row.available < 0 && <Badge variant="danger">Overspent</Badge>}</div></td><td className="px-3 py-1.5 text-right">{isEditing ? <div className="ml-auto flex max-w-[240px] items-center gap-2"><Input aria-label={`Assigned amount for ${row.categoryName}`} type="number" value={editingAmount} onChange={(e) => setEditingAmount(e.target.value)} /><Button size="sm" onClick={(e) => { e.stopPropagation(); saveAssignment(row.categoryId, Number(editingAmount)) }} disabled={!assignmentsEnabled}>Save</Button></div> : <button className="rounded px-2 py-1 font-bold text-primary transition hover:bg-primary/10 disabled:text-muted-foreground" disabled={!assignmentsEnabled} onClick={(e) => { e.stopPropagation(); setEditingCategoryId(row.categoryId); setEditingAmount(String(row.assigned)) }}>{currency(row.assigned)}</button>}</td><td className="px-3 py-1.5 text-right text-muted-foreground">{currency(row.activity)}</td><td className="px-3 py-1.5 text-right"><AvailabilityChip amount={row.available} /></td></tr> })}
+            {group.rows.map((row) => { const isSelected = selectedCategoryId === row.categoryId; const isEditing = editingCategoryId === row.categoryId; return <tr key={row.categoryId} data-testid={`budget-row-${row.categoryId}`} onClick={() => setSelectedCategoryId(row.categoryId)} className={cn('ez-row border-t border-white/5 cursor-pointer', isSelected && 'bg-muted/50')}><td className="px-3 py-1.5"><div className="flex items-center gap-1.5"><span className="font-semibold">{row.categoryName}</span>{row.available < 0 && <Badge variant="danger">Overspent</Badge>}</div></td><td className="px-3 py-1.5 text-right">{isEditing ? <div className="ml-auto flex max-w-[240px] items-center gap-2"><Input aria-label={`Assigned amount for ${row.categoryName}`} type="number" value={editingAmount} onChange={(e) => setEditingAmount(e.target.value)} /><Button size="sm" onClick={(e) => { e.stopPropagation(); saveAssignment(row.categoryId, Number(editingAmount)) }} disabled={!assignmentsEnabled}>Save</Button></div> : <button className="px-2 py-1 font-bold text-primary transition hover:bg-primary/10 disabled:text-muted-foreground" disabled={!assignmentsEnabled} onClick={(e) => { e.stopPropagation(); setEditingCategoryId(row.categoryId); setEditingAmount(String(row.assigned)) }}>{currency(row.assigned)}</button>}</td><td className="px-3 py-1.5 text-right text-muted-foreground">{currency(row.activity)}</td><td className="px-3 py-1.5 text-right"><AvailabilityChip amount={row.available} /></td></tr> })}
           </Fragment>)}
           {!groupedRows.length && <tr><td colSpan={4} className="px-4 py-8 text-center text-muted-foreground">No categories yet. Add categories to start assigning money.</td></tr>}
         </tbody></table></div>
@@ -178,7 +178,7 @@ export function App() {
       {notice && <p className="mt-3 text-xs text-muted-foreground">{notice}</p>}
     </main>
 
-    <aside className="hidden border-l border-white/10 px-4 pt-4 md:block">
+    <aside className="workspace-pane hidden border-l border-white/10 px-4 pt-4 md:block">
       <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Inspector</p>
       <h3 className="mt-1 text-lg font-semibold">{selectedRow?.categoryName || 'Select a category'}</h3>
       <div className="mt-4 space-y-3 text-sm">
@@ -201,7 +201,7 @@ export function App() {
 }
 
 function AvailabilityChip({ amount }: { amount: number }) {
-  return <span className={cn('inline-flex min-w-[74px] justify-center rounded-md px-2 py-0.5 text-[11px] font-semibold', amount < 0 ? 'bg-rose-500/20 text-rose-200' : amount === 0 ? 'bg-slate-500/25 text-slate-300' : 'bg-emerald-500/20 text-emerald-200')}>{currency(amount)}</span>
+  return <span className={cn('inline-flex min-w-[74px] justify-center rounded-full px-2 py-0.5 text-[11px] font-semibold', amount < 0 ? 'bg-rose-500/20 text-rose-200' : amount === 0 ? 'bg-slate-500/25 text-slate-300' : 'bg-emerald-500/20 text-emerald-200')}>{currency(amount)}</span>
 }
 
 function SummaryRow({ label, value, highlighted }: { label: string; value: string; highlighted?: boolean }) {
@@ -214,5 +214,5 @@ function CrudPanel({ title, items, onCreate, parentRequired }: { title: string; 
 }
 
 function ToastViewport({ toasts }: { toasts: Toast[] }) {
-  return <div className="fixed right-4 top-4 z-50 grid gap-2" aria-live="polite">{toasts.map((toast) => <div className={cn('rounded-md border border-white/10 px-3 py-2 text-sm text-white shadow-2xl backdrop-blur', toast.tone === 'error' && 'bg-rose-600/90', toast.tone === 'success' && 'bg-emerald-600/90', toast.tone === 'info' && 'bg-slate-700/90')} key={toast.id}>{toast.message}</div>)}</div>
+  return <div className="fixed right-4 top-4 z-50 grid gap-2" aria-live="polite">{toasts.map((toast) => <div className={cn('border border-white/10 px-3 py-2 text-sm text-white', toast.tone === 'error' && 'bg-rose-600/90', toast.tone === 'success' && 'bg-emerald-600/90', toast.tone === 'info' && 'bg-slate-700/90')} key={toast.id}>{toast.message}</div>)}</div>
 }

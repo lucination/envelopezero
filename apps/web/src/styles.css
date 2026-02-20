@@ -42,7 +42,7 @@ body {
 }
 
 .ios-icon-btn {
-  @apply flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-white/5 text-muted-foreground;
+  @apply flex h-9 w-9 items-center justify-center border border-white/15 bg-transparent text-muted-foreground;
 }
 
 .mobile-cta {
@@ -50,7 +50,7 @@ body {
   left: 50%;
   bottom: calc(5.6rem + env(safe-area-inset-bottom));
   transform: translateX(-50%);
-  @apply z-40 inline-flex items-center gap-1.5 rounded-full border border-sky-300/40 bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-glow;
+  @apply z-40 inline-flex items-center gap-1.5 border border-sky-300/40 bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground;
 }
 
 .mobile-nav {
@@ -67,4 +67,12 @@ body {
 
 .mobile-nav-item-active {
   @apply text-primary;
+}
+
+.workspace-pane,
+.workspace-strip {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  outline: none;
+  background-image: none;
 }
