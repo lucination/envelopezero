@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
+import { ArrowLeft, ArrowRight, Landmark, PiggyBank, ReceiptText, Settings } from 'lucide-react'
+import { Badge } from './components/ui/badge'
+import { Button } from './components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card'
+import { Input } from './components/ui/input'
+import { cn } from './lib/utils'
 
 type Budget = { id: string; name: string; currency_code: string; is_default: boolean }
 type Named = { id: string; name: string; budget_id?: string }
@@ -9,24 +15,28 @@ type Session = { token: string; user_id: string }
 type AppTab = 'budget' | 'transactions' | 'accounts' | 'settings'
 type ToastTone = 'info' | 'success' | 'error'
 type Toast = { id: number; message: string; tone: ToastTone }
+type CategoryProjection = { category_id: string; assigned: number; activity: number; available: number }
+type BudgetRow = { categoryId: string; categoryName: string; supercategoryId: string; supercategoryName: string; assigned: number; activity: number; available: number }
+
+class ApiError extends Error { constructor(public status: number, message: string) { super(message) }}
 
 const API = '/api'
-const tabs: { id: AppTab; label: string }[] = [
-  { id: 'budget', label: 'Budget' },
-  { id: 'transactions', label: 'Transactions' },
-  { id: 'accounts', label: 'Accounts' },
-  { id: 'settings', label: 'Settings' },
+const tabs: { id: AppTab; label: string; icon: ReactNode }[] = [
+  { id: 'budget', label: 'Budget', icon: <PiggyBank className="h-4 w-4" /> },
+  { id: 'transactions', label: 'Transactions', icon: <ReceiptText className="h-4 w-4" /> },
+  { id: 'accounts', label: 'Accounts', icon: <Landmark className="h-4 w-4" /> },
+  { id: 'settings', label: 'Settings', icon: <Settings className="h-4 w-4" /> },
 ]
 
 async function api<T>(path: string, token: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API}${path}`, {
-    ...init,
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...(init?.headers || {}) },
-  })
-  if (!res.ok) throw new Error(`Request failed: ${res.status}`)
+  const res = await fetch(`${API}${path}`, { ...init, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...(init?.headers || {}) } })
+  if (!res.ok) throw new ApiError(res.status, `Request failed: ${res.status}`)
   if (res.status === 204) return {} as T
   return (await res.json()) as T
 }
+
+function currency(amount: number) { return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(amount / 100) }
+function monthShift(month: string, direction: -1 | 1) { const [y, m] = month.split('-').map(Number); const d = new Date(y, m - 1 + direction, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` }
 
 export function App() {
   const [session, setSession] = useState<Session | null>(null)
@@ -36,206 +46,104 @@ export function App() {
   const [loading, setLoading] = useState(false)
   const [activeTab, setActiveTab] = useState<AppTab>('budget')
   const [toasts, setToasts] = useState<Toast[]>([])
-
   const [budgets, setBudgets] = useState<Budget[]>([])
   const [accounts, setAccounts] = useState<Named[]>([])
   const [supercategories, setSupercategories] = useState<Named[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [dashboard, setDashboard] = useState({ inflow: 0, outflow: 0, available: 0 })
-
+  const [projections, setProjections] = useState<CategoryProjection[]>([])
+  const [month, setMonth] = useState(new Date().toISOString().slice(0, 7))
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null)
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null)
+  const [editingAmount, setEditingAmount] = useState('0')
+  const [assignmentsEnabled, setAssignmentsEnabled] = useState(true)
   const [txDate, setTxDate] = useState(new Date().toISOString().slice(0, 10))
   const [txPayee, setTxPayee] = useState('')
   const [txMemo, setTxMemo] = useState('')
   const [txInflow, setTxInflow] = useState('0')
   const [txOutflow, setTxOutflow] = useState('0')
-  const [assignmentAmount, setAssignmentAmount] = useState('0')
 
   const activeBudget = useMemo(() => budgets.find((b) => b.is_default) || budgets[0], [budgets])
-  const activeMonth = txDate.slice(0, 7)
+  const pushToast = (message: string, tone: ToastTone = 'info') => { const id = Date.now(); setToasts((p) => [...p, { id, message, tone }]); setTimeout(() => setToasts((p) => p.filter((t) => t.id !== id)), 3200) }
 
-  function pushToast(message: string, tone: ToastTone = 'info') {
-    const id = Date.now() + Math.floor(Math.random() * 1000)
-    setToasts((prev) => [...prev, { id, message, tone }])
-    setTimeout(() => setToasts((prev) => prev.filter((toast) => toast.id !== id)), tone === 'error' ? 6000 : 3500)
-  }
-
-  useEffect(() => {
-    const raw = localStorage.getItem('ez_session')
-    if (raw) setSession(JSON.parse(raw))
-  }, [])
-
-  useEffect(() => {
-    if (!session) return
-    localStorage.setItem('ez_session', JSON.stringify(session))
-    refresh(session.token).catch(() => {
-      setNotice('Failed to load data')
-      pushToast('Could not load your data. Try again.', 'error')
-    })
-  }, [session])
+  useEffect(() => { const raw = localStorage.getItem('ez_session'); if (raw) setSession(JSON.parse(raw)) }, [])
+  useEffect(() => { if (!session) return; localStorage.setItem('ez_session', JSON.stringify(session)); refresh(session.token).catch(() => pushToast('Could not load your data.', 'error')) }, [session])
+  useEffect(() => { if (!session) return; refreshMonthProjection(session.token).catch(() => pushToast('Could not refresh budget projection.', 'error')) }, [month, session, categories.length])
 
   async function refresh(token = session?.token) {
     if (!token) return
     setLoading(true)
     try {
       const [b, a, s, c, t, d] = await Promise.all([
-        api<Budget[]>('/budgets', token),
-        api<Named[]>('/accounts', token),
-        api<Named[]>('/supercategories', token),
-        api<Category[]>('/categories', token),
-        api<Transaction[]>('/transactions', token),
-        api<{ inflow: number; outflow: number; available: number }>('/dashboard', token),
+        api<Budget[]>('/budgets', token), api<Named[]>('/accounts', token), api<Named[]>('/supercategories', token), api<Category[]>('/categories', token), api<Transaction[]>('/transactions', token), api<{ inflow: number; outflow: number; available: number }>('/dashboard', token),
       ])
       setBudgets(b); setAccounts(a); setSupercategories(s); setCategories(c); setTransactions(t); setDashboard(d)
-    } finally {
-      setLoading(false)
+    } finally { setLoading(false) }
+  }
+
+  async function refreshMonthProjection(token = session?.token) { if (!token) return; setProjections(await api<CategoryProjection[]>(`/projections/month/${month}`, token)) }
+  async function requestMagicLink(e: FormEvent) { e.preventDefault(); const res = await fetch(`${API}/auth/magic-link/request`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) }); const data = await res.json(); setNotice(`Mail sent. Dev token: ${data.debug_token ?? 'check Mailpit'}`); setTokenInput(data.debug_token || '') }
+  async function verifyToken(e: FormEvent) { e.preventDefault(); const res = await fetch(`${API}/auth/magic-link/verify`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: tokenInput }) }); if (!res.ok) return setNotice('Token invalid or expired'); setSession(await res.json()) }
+
+  const budgetRows = useMemo<BudgetRow[]>(() => {
+    const pmap = new Map(projections.map((p) => [p.category_id, p])); const smap = new Map(supercategories.map((s) => [s.id, s.name]))
+    return categories.filter((c) => !activeBudget || c.budget_id === activeBudget.id).map((c) => ({ categoryId: c.id, categoryName: c.name, supercategoryId: c.supercategory_id, supercategoryName: smap.get(c.supercategory_id) || 'Uncategorized', assigned: pmap.get(c.id)?.assigned ?? 0, activity: pmap.get(c.id)?.activity ?? 0, available: pmap.get(c.id)?.available ?? 0 }))
+  }, [activeBudget, categories, projections, supercategories])
+  const groupedRows = useMemo(() => { const grouped = new Map<string, { name: string; rows: BudgetRow[] }>(); budgetRows.forEach((row) => { if (!grouped.has(row.supercategoryId)) grouped.set(row.supercategoryId, { name: row.supercategoryName, rows: [] }); grouped.get(row.supercategoryId)?.rows.push(row) }); return [...grouped.entries()].map(([id, group]) => ({ id, ...group })) }, [budgetRows])
+  const readyToAssign = useMemo(() => dashboard.available - budgetRows.reduce((sum, row) => sum + row.assigned, 0), [dashboard.available, budgetRows])
+
+  async function saveAssignment(categoryId: string, nextAssignedAbsolute: number) {
+    if (!session || !activeBudget) return
+    const current = budgetRows.find((row) => row.categoryId === categoryId); if (!current) return
+    const delta = nextAssignedAbsolute - current.assigned; if (delta === 0) return setEditingCategoryId(null)
+    try {
+      await api('/category-assignments', session.token, { method: 'POST', body: JSON.stringify({ budget_id: activeBudget.id, category_id: categoryId, month, amount: delta }) })
+      setEditingCategoryId(null); await refreshMonthProjection(session.token); await refresh(session.token)
+    } catch (error) {
+      if (error instanceof ApiError && (error.status === 404 || error.status === 501)) { setAssignmentsEnabled(false); setEditingCategoryId(null); return }
+      pushToast('Could not save assignment.', 'error')
     }
   }
 
-  async function requestMagicLink(e: React.FormEvent) {
-    e.preventDefault()
-    const res = await fetch(`${API}/auth/magic-link/request`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) })
-    const data = await res.json()
-    const message = `Mail sent. Dev token: ${data.debug_token ?? 'check Mailpit'}`
-    setNotice(message)
-    setTokenInput(data.debug_token || '')
-    pushToast('Magic link sent. Check your inbox.', 'success')
-  }
+  if (!session) return <main className="min-h-screen bg-muted/30 p-4 sm:grid sm:place-items-center"><Card className="mx-auto w-full max-w-md"><CardHeader><CardTitle>EnvelopeZero</CardTitle><p className="text-sm text-muted-foreground">Professional zero-based budgeting.</p></CardHeader><CardContent className="space-y-3"><form className="space-y-2" onSubmit={requestMagicLink}><Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" aria-label="Email" /><Button className="w-full">Send magic link</Button></form><form className="space-y-2" onSubmit={verifyToken}><Input value={tokenInput} onChange={(e) => setTokenInput(e.target.value)} placeholder="Paste token" aria-label="Token" /><Button variant="secondary" className="w-full">Verify token</Button></form><p className="text-xs text-muted-foreground">{notice || 'Sign in to continue'}</p></CardContent></Card><ToastViewport toasts={toasts} /></main>
 
-  async function verifyToken(e: React.FormEvent) {
-    e.preventDefault()
-    const res = await fetch(`${API}/auth/magic-link/verify`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: tokenInput }) })
-    if (!res.ok) {
-      setNotice('Token invalid or expired')
-      pushToast('Token invalid or expired', 'error')
-      return
-    }
-    setSession(await res.json())
-    pushToast('Signed in successfully', 'success')
-  }
-
-  if (!session) return <main className="auth-shell"><Card><h1>EnvelopeZero</h1><p className="eyebrow">Budget with clarity.</p><form onSubmit={requestMagicLink}><Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" aria-label="Email" /><Button>Send magic link</Button></form><form onSubmit={verifyToken}><Input value={tokenInput} onChange={(e) => setTokenInput(e.target.value)} placeholder="Paste token" aria-label="Token" /><Button variant="secondary">Verify token</Button></form><p className="status">{notice || 'Sign in to continue'}</p></Card><ToastViewport toasts={toasts} /></main>
-
-  return (
-    <div className="app-shell">
-      <aside className="sidebar card-like">
-        <h2 className="brand">EnvelopeZero</h2>
-        <nav className="stack" aria-label="Primary">
-          {tabs.map((tab) => (
-            <Button key={tab.id} variant={activeTab === tab.id ? 'primary' : 'ghost'} onClick={() => setActiveTab(tab.id)}>
-              {tab.label}
-            </Button>
-          ))}
-        </nav>
-      </aside>
-
-      <div className="app-main">
-        <header className="topbar card-like">
-          <div>
-            <p className="eyebrow">{activeBudget?.name || 'No budget'}</p>
-            <h1>{tabs.find((tab) => tab.id === activeTab)?.label}</h1>
-          </div>
-          <div className="topbar-actions">
-            <p className="status">{loading ? 'Refreshing…' : `Month ${activeMonth}`}</p>
-            <Button onClick={() => setActiveTab('transactions')}>Add transaction</Button>
-          </div>
-        </header>
-
-        <main className="content-grid">
-          {activeTab === 'budget' && (
-            <>
-              <Card className="panel-row">
-                <h2>Dashboard</h2>
-                <p data-testid="dashboard-totals">Inflow: {dashboard.inflow} · Outflow: {dashboard.outflow} · Available: {dashboard.available}</p>
-                <div className="badge-row">
-                  <StateBadge tone={dashboard.available < 0 ? 'error' : dashboard.available < 100 ? 'warning' : 'success'}>
-                    {dashboard.available < 0 ? 'Overspent' : dashboard.available < 100 ? 'Near zero' : 'On track'}
-                  </StateBadge>
-                </div>
-              </Card>
-
-              <Card>
-                <h2>Category assignment ({activeMonth})</h2>
-                <p className="status">Guardrailed capability: disabled unless server flag is on.</p>
-                <form onSubmit={async (e) => {
-                  e.preventDefault(); if (!session || !activeBudget || !categories[0]) return
-                  await api('/category-assignments', session.token, { method: 'POST', body: JSON.stringify({ budget_id: activeBudget.id, category_id: categories[0].id, month: activeMonth, amount: Number(assignmentAmount) }) })
-                  const message = 'Assignment saved'
-                  setNotice(message)
-                  pushToast(message, 'success')
-                }}>
-                  <Input aria-label="Assignment amount" type="number" value={assignmentAmount} onChange={(e) => setAssignmentAmount(e.target.value)} />
-                  <Button type="submit">Assign to first category</Button>
-                </form>
-              </Card>
-
-              <CrudPanel title="Supercategories" items={supercategories} parentRequired={!activeBudget} onCreate={async (name) => { if (!session || !activeBudget) return; await api('/supercategories', session.token, { method: 'POST', body: JSON.stringify({ name, budget_id: activeBudget.id }) }); await refresh(); pushToast('Supercategory created', 'success') }} />
-              <CrudPanel title="Categories" items={categories} parentRequired={!activeBudget || !supercategories[0]} onCreate={async (name) => { if (!session || !activeBudget || !supercategories[0]) return; await api('/categories', session.token, { method: 'POST', body: JSON.stringify({ name, budget_id: activeBudget.id, supercategory_id: supercategories[0].id }) }); await refresh(); pushToast('Category created', 'success') }} />
-            </>
-          )}
-
-          {activeTab === 'transactions' && (
-            <Card className="panel-row">
-              <h2>Transactions</h2>
-              <form onSubmit={async (e) => { e.preventDefault(); if (!activeBudget || !accounts[0] || !categories[0] || !session) { setNotice('Need budget/account/category'); pushToast('Need budget/account/category', 'error'); return } await api('/transactions', session.token, { method: 'POST', body: JSON.stringify({ budget_id: activeBudget.id, account_id: accounts[0].id, date: txDate, payee: txPayee || null, memo: txMemo || null, splits: [{ category_id: categories[0].id, inflow: Number(txInflow), outflow: Number(txOutflow), memo: null }] }) }); setNotice('Transaction created'); pushToast('Transaction created', 'success'); setTxPayee(''); setTxMemo(''); setTxInflow('0'); setTxOutflow('0'); await refresh() }}>
-                <Input aria-label="Transaction date" type="date" value={txDate} onChange={(e) => setTxDate(e.target.value)} />
-                <Input aria-label="Payee" value={txPayee} onChange={(e) => setTxPayee(e.target.value)} placeholder="Payee" />
-                <Input aria-label="Memo" value={txMemo} onChange={(e) => setTxMemo(e.target.value)} placeholder="Memo" />
-                <Input aria-label="Inflow" type="number" value={txInflow} onChange={(e) => setTxInflow(e.target.value)} />
-                <Input aria-label="Outflow" type="number" value={txOutflow} onChange={(e) => setTxOutflow(e.target.value)} />
-                <Button>Create transaction</Button>
-              </form>
-              {!transactions.length && <p className="status">No transactions yet</p>}
-            </Card>
-          )}
-
-          {activeTab === 'accounts' && (
-            <CrudPanel title="Accounts" items={accounts} parentRequired={!activeBudget} onCreate={async (name) => { if (!session || !activeBudget) return; await api('/accounts', session.token, { method: 'POST', body: JSON.stringify({ name, budget_id: activeBudget.id }) }); await refresh(); pushToast('Account created', 'success') }} />
-          )}
-
-          {activeTab === 'settings' && (
-            <Card className="panel-row">
-              <h2>Settings</h2>
-              <p className="status">Manage authentication and session controls.</p>
-              <Button variant="secondary" onClick={() => { localStorage.removeItem('ez_session'); setSession(null) }}>Logout</Button>
-            </Card>
-          )}
-          <p className="status panel-row">{notice}</p>
-        </main>
-      </div>
-
-      <nav className="bottom-nav" aria-label="Mobile primary">
-        {tabs.map((tab) => (
-          <button key={tab.id} className={`tab-btn ${activeTab === tab.id ? 'active' : ''}`} onClick={() => setActiveTab(tab.id)}>{tab.label}</button>
-        ))}
+  return <div className="min-h-screen bg-muted/30 md:grid md:grid-cols-[250px_1fr] md:gap-4 md:p-4">
+    <aside className="hidden rounded-lg border bg-card p-4 shadow-sm md:block">
+      <h2 className="mb-4 text-lg font-semibold">EnvelopeZero</h2>
+      <nav className="space-y-1" aria-label="Primary">
+        {tabs.map((tab) => <Button key={tab.id} variant={activeTab === tab.id ? 'default' : 'ghost'} className="w-full justify-start" onClick={() => setActiveTab(tab.id)}>{tab.icon}{tab.label}</Button>)}
       </nav>
-
-      <ToastViewport toasts={toasts} />
+    </aside>
+    <div className="p-4 md:p-0">
+      <header className="mb-4 rounded-lg border bg-card p-4 shadow-sm"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs uppercase tracking-wide text-muted-foreground">{activeBudget?.name || 'No budget'}</p><h1 className="text-2xl font-semibold">{tabs.find((t) => t.id === activeTab)?.label}</h1></div><div className="flex items-center gap-2 text-sm text-muted-foreground"><span>{loading ? 'Refreshing…' : `Month ${month}`}</span><Button size="sm" onClick={() => setActiveTab('transactions')}>Add transaction</Button></div></div></header>
+      {activeTab === 'budget' && <section className="space-y-4">
+        <Card data-testid="dashboard-totals"><CardContent className="grid gap-4 p-4 md:grid-cols-[1fr_auto]"><div><p className="text-xs uppercase tracking-wide text-muted-foreground">Ready to Assign</p><p data-testid="ready-to-assign" className={cn('text-3xl font-bold', readyToAssign < 0 ? 'text-danger' : 'text-success')}>{currency(readyToAssign)}</p></div><div className="flex items-center gap-2"><Button variant="outline" size="sm" onClick={() => setMonth((m) => monthShift(m, -1))}><ArrowLeft className="h-4 w-4" />Previous</Button><span className="w-20 text-center text-sm font-medium">{month}</span><Button variant="outline" size="sm" onClick={() => setMonth((m) => monthShift(m, 1))}>Next<ArrowRight className="h-4 w-4" /></Button></div>{!assignmentsEnabled && <p className="text-xs text-muted-foreground md:col-span-2">Assignments are view-only because assignment API is disabled.</p>}</CardContent></Card>
+        <Card><CardContent className="overflow-x-auto p-0" data-testid="budget-workspace"><table className="min-w-full text-sm"><thead className="bg-muted/40 text-muted-foreground"><tr><th className="px-4 py-3 text-left font-medium">Category</th><th className="px-4 py-3 text-right font-medium">Assigned</th><th className="px-4 py-3 text-right font-medium">Activity</th><th className="px-4 py-3 text-right font-medium">Available</th></tr></thead><tbody>
+          {groupedRows.map((group) => <Fragment key={group.id}>
+            <tr key={`${group.id}-h`} className="bg-muted/20"><td colSpan={4} className="px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{group.name}</td></tr>
+            {group.rows.map((row) => { const isSelected = selectedCategoryId === row.categoryId; const isEditing = editingCategoryId === row.categoryId; return <tr key={row.categoryId} data-testid={`budget-row-${row.categoryId}`} onClick={() => setSelectedCategoryId(row.categoryId)} className={cn('border-t cursor-pointer', isSelected && 'bg-muted/30')}><td className="px-4 py-3"><div className="flex items-center gap-2"><span className="font-medium">{row.categoryName}</span>{row.available < 0 && <Badge variant="danger">Overspent</Badge>}</div>{isSelected && row.available < 0 && <p className="mt-1 text-xs text-muted-foreground">Cover overspending by moving money from another category.</p>}</td><td className="px-4 py-3 text-right">{isEditing ? <div className="ml-auto flex max-w-[220px] items-center gap-2"><Input aria-label={`Assigned amount for ${row.categoryName}`} type="number" value={editingAmount} onChange={(e) => setEditingAmount(e.target.value)} /><Button size="sm" onClick={(e) => { e.stopPropagation(); saveAssignment(row.categoryId, Number(editingAmount)) }} disabled={!assignmentsEnabled}>Save</Button></div> : <button className="font-semibold text-primary" disabled={!assignmentsEnabled} onClick={(e) => { e.stopPropagation(); setEditingCategoryId(row.categoryId); setEditingAmount(String(row.assigned)) }}>{currency(row.assigned)}</button>}</td><td className="px-4 py-3 text-right">{currency(row.activity)}</td><td className={cn('px-4 py-3 text-right font-semibold', row.available < 0 ? 'text-danger' : row.available < 1000 ? 'text-warning' : 'text-success')}>{currency(row.available)}</td></tr> })}
+          </Fragment>)}
+          {!groupedRows.length && <tr><td colSpan={4} className="px-4 py-8 text-center text-muted-foreground">No categories yet. Add categories to start assigning money.</td></tr>}
+        </tbody></table></CardContent></Card>
+      </section>}
+      {activeTab === 'transactions' && <Card><CardHeader><CardTitle>Transactions</CardTitle></CardHeader><CardContent><form className="grid gap-2 md:grid-cols-2" onSubmit={async (e) => { e.preventDefault(); if (!activeBudget || !accounts[0] || !categories[0] || !session) return setNotice('Need budget/account/category'); await api('/transactions', session.token, { method: 'POST', body: JSON.stringify({ budget_id: activeBudget.id, account_id: accounts[0].id, date: txDate, payee: txPayee || null, memo: txMemo || null, splits: [{ category_id: categories[0].id, inflow: Number(txInflow), outflow: Number(txOutflow), memo: null }] }) }); setNotice('Transaction created'); setTxPayee(''); setTxMemo(''); setTxInflow('0'); setTxOutflow('0'); await refresh(); await refreshMonthProjection() }}><Input aria-label="Transaction date" type="date" value={txDate} onChange={(e) => setTxDate(e.target.value)} /><Input aria-label="Payee" value={txPayee} onChange={(e) => setTxPayee(e.target.value)} placeholder="Payee" /><Input aria-label="Memo" value={txMemo} onChange={(e) => setTxMemo(e.target.value)} placeholder="Memo" /><Input aria-label="Inflow" type="number" value={txInflow} onChange={(e) => setTxInflow(e.target.value)} /><Input aria-label="Outflow" type="number" value={txOutflow} onChange={(e) => setTxOutflow(e.target.value)} /><Button className="md:col-span-2">Create transaction</Button></form>{!transactions.length && <p className="mt-2 text-sm text-muted-foreground">No transactions yet</p>}</CardContent></Card>}
+      {activeTab === 'accounts' && <CrudPanel title="Accounts" items={accounts} parentRequired={!activeBudget} onCreate={async (name) => { if (!session || !activeBudget) return; await api('/accounts', session.token, { method: 'POST', body: JSON.stringify({ name, budget_id: activeBudget.id }) }); await refresh() }} />}
+      {activeTab === 'settings' && <Card><CardHeader><CardTitle>Settings</CardTitle></CardHeader><CardContent><p className="mb-3 text-sm text-muted-foreground">Manage authentication and session controls.</p><Button variant="secondary" onClick={() => { localStorage.removeItem('ez_session'); setSession(null) }}>Logout</Button></CardContent></Card>}
+      {notice && <p className="mt-3 text-xs text-muted-foreground">{notice}</p>}
     </div>
-  )
+    <nav className="fixed inset-x-0 bottom-0 grid grid-cols-4 border-t bg-card p-2 md:hidden" aria-label="Mobile primary">
+      {tabs.map((tab) => <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={cn('rounded-md px-2 py-2 text-xs font-medium text-muted-foreground', activeTab === tab.id && 'bg-muted text-foreground')}>{tab.label}</button>)}
+    </nav>
+    <ToastViewport toasts={toasts} />
+  </div>
 }
 
 function CrudPanel({ title, items, onCreate, parentRequired }: { title: string; items: any[]; onCreate: (name: string) => Promise<void>; parentRequired?: boolean }) {
   const [name, setName] = useState('')
-  return <Card><h2>{title}</h2><form onSubmit={async (e) => { e.preventDefault(); if (!name.trim() || parentRequired) return; await onCreate(name); setName('') }}><Input aria-label={`New ${title}`} value={name} onChange={(e) => setName(e.target.value)} disabled={parentRequired} /><Button disabled={parentRequired}>Create</Button></form>{!items.length && <p className="status">No {title.toLowerCase()} yet</p>}<ul>{items.map((x) => <li key={x.id}>{x.name}</li>)}</ul></Card>
-}
-
-function Card({ children, className = '' }: { children: React.ReactNode; className?: string }) {
-  return <section className={`card-like ${className}`.trim()}>{children}</section>
-}
-
-function Button({ children, variant = 'primary', ...props }: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'ghost' }) {
-  return <button className={`btn btn-${variant}`} {...props}>{children}</button>
-}
-
-function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
-  return <input className="input" {...props} />
-}
-
-function StateBadge({ children, tone = 'success' }: { children: React.ReactNode; tone?: 'success' | 'warning' | 'error' }) {
-  return <span className={`badge badge-${tone}`}>{children}</span>
+  return <Card><CardHeader><CardTitle>{title}</CardTitle></CardHeader><CardContent><form className="space-y-2" onSubmit={async (e) => { e.preventDefault(); if (!name.trim() || parentRequired) return; await onCreate(name); setName('') }}><Input aria-label={`New ${title}`} value={name} onChange={(e) => setName(e.target.value)} disabled={parentRequired} /><Button disabled={parentRequired}>Create</Button></form>{!items.length && <p className="mt-2 text-sm text-muted-foreground">No {title.toLowerCase()} yet</p>}<ul className="mt-3 list-disc pl-5 text-sm">{items.map((x) => <li key={x.id}>{x.name}</li>)}</ul></CardContent></Card>
 }
 
 function ToastViewport({ toasts }: { toasts: Toast[] }) {
-  return <div className="toast-viewport" aria-live="polite">{toasts.map((toast) => <div className={`toast toast-${toast.tone}`} key={toast.id}>{toast.message}</div>)}</div>
+  return <div className="fixed right-4 top-4 z-50 grid gap-2" aria-live="polite">{toasts.map((toast) => <div className={cn('rounded-md px-3 py-2 text-sm text-white shadow', toast.tone === 'error' && 'bg-rose-600', toast.tone === 'success' && 'bg-emerald-600', toast.tone === 'info' && 'bg-slate-700')} key={toast.id}>{toast.message}</div>)}</div>
 }
